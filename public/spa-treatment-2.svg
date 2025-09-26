@@ -1,0 +1,9 @@
+<svg width="800" height="600" viewBox="0 0 800 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="800" height="600" fill="#f7fafc"/>
+<rect x="100" y="150" width="600" height="300" rx="20" fill="#edf2f7"/>
+<ellipse cx="350" cy="280" rx="80" ry="60" fill="#d1d5db"/>
+<ellipse cx="450" cy="320" rx="70" ry="50" fill="#d1d5db"/>
+<rect x="250" y="200" width="300" height="20" rx="10" fill="#9ca3af"/>
+<text x="400" y="450" text-anchor="middle" fill="#4a5568" font-family="Arial, sans-serif" font-size="24" font-weight="bold">Spa Treatment 2</text>
+<text x="400" y="480" text-anchor="middle" fill="#718096" font-family="Arial, sans-serif" font-size="16">Facial & Skincare</text>
+</svg>

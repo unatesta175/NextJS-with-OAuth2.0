@@ -1,0 +1,10 @@
+<svg width="500" height="400" viewBox="0 0 500 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="500" height="400" fill="#f8fafc"/>
+<circle cx="150" cy="150" r="40" fill="#e2e8f0"/>
+<circle cx="250" cy="130" r="45" fill="#e2e8f0"/>
+<circle cx="350" cy="150" r="40" fill="#e2e8f0"/>
+<path d="M90 300C90 265 118 237 153 237H197C232 237 260 265 260 300V400H90V300Z" fill="#e2e8f0"/>
+<path d="M190 280C190 245 218 217 253 217H297C332 217 360 245 360 280V400H190V280Z" fill="#e2e8f0"/>
+<path d="M290 300C290 265 318 237 353 237H397C432 237 460 265 460 300V400H290V300Z" fill="#e2e8f0"/>
+<text x="250" y="350" text-anchor="middle" fill="#4a5568" font-family="Arial, sans-serif" font-size="18" font-weight="bold">Happy Spa Team</text>
+</svg>

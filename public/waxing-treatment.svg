@@ -1,0 +1,7 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="200" height="200" fill="#fef3c7"/>
+<rect x="60" y="80" width="80" height="60" rx="10" fill="#f59e0b"/>
+<rect x="70" y="90" width="60" height="40" rx="5" fill="#fbbf24"/>
+<rect x="90" y="50" width="20" height="30" rx="10" fill="#d97706"/>
+<text x="100" y="170" text-anchor="middle" fill="#4a5568" font-family="Arial, sans-serif" font-size="12" font-weight="bold">Waxing Treatment</text>
+</svg>

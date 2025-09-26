@@ -1,0 +1,9 @@
+<svg width="800" height="600" viewBox="0 0 800 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="800" height="600" fill="#f0f4f8"/>
+<rect x="100" y="150" width="600" height="300" rx="20" fill="#e2e8f0"/>
+<circle cx="300" cy="250" r="40" fill="#cbd5e0"/>
+<circle cx="400" cy="300" r="35" fill="#cbd5e0"/>
+<circle cx="500" cy="250" r="30" fill="#cbd5e0"/>
+<text x="400" y="450" text-anchor="middle" fill="#4a5568" font-family="Arial, sans-serif" font-size="24" font-weight="bold">Spa Treatment 1</text>
+<text x="400" y="480" text-anchor="middle" fill="#718096" font-family="Arial, sans-serif" font-size="16">Relaxing Massage Therapy</text>
+</svg>

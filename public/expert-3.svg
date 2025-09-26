@@ -1,0 +1,6 @@
+<svg width="150" height="150" viewBox="0 0 150 150" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="150" height="150" fill="#f0fdf4"/>
+<circle cx="75" cy="55" r="25" fill="#dcfce7"/>
+<path d="M35 120C35 104.3 47.3 92 63 92H87C102.7 92 115 104.3 115 120V150H35V120Z" fill="#dcfce7"/>
+<text x="75" y="130" text-anchor="middle" fill="#4a5568" font-family="Arial, sans-serif" font-size="12" font-weight="bold">Expert 3</text>
+</svg>

@@ -1,0 +1,9 @@
+<svg width="400" height="300" viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="400" height="300" fill="#f5f3ff"/>
+<circle cx="200" cy="120" r="60" fill="#e9d5ff"/>
+<path d="M160 80 Q200 50 240 80" stroke="#a855f7" stroke-width="6" fill="none"/>
+<path d="M140 100 Q170 70 200 100" stroke="#a855f7" stroke-width="4" fill="none"/>
+<path d="M200 100 Q230 70 260 100" stroke="#a855f7" stroke-width="4" fill="none"/>
+<rect x="180" y="190" width="40" height="70" rx="20" fill="#7c3aed"/>
+<text x="200" y="280" text-anchor="middle" fill="#4a5568" font-family="Arial, sans-serif" font-size="20" font-weight="bold">Hair Treatment</text>
+</svg>

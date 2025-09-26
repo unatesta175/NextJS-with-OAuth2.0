@@ -1,0 +1,10 @@
+<svg width="800" height="400" viewBox="0 0 800 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="800" height="400" fill="#f0f9ff"/>
+<rect x="100" y="100" width="600" height="200" rx="20" fill="#bae6fd"/>
+<rect x="150" y="50" width="500" height="100" rx="15" fill="#0ea5e9"/>
+<circle cx="400" cy="200" r="50" fill="#0284c7"/>
+<triangle cx="400" cy="200" size="30" fill="#ffffff"/>
+<path d="M370 185 L400 200 L370 215 Z" fill="#ffffff"/>
+<path d="M385 200 L415 185 L415 215 Z" fill="#ffffff"/>
+<text x="400" y="320" text-anchor="middle" fill="#4a5568" font-family="Arial, sans-serif" font-size="24" font-weight="bold">Spa Facility Video</text>
+</svg>
