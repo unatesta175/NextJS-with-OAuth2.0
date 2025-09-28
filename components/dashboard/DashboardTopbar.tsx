@@ -2,8 +2,10 @@
 
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
+import Link from 'next/link'
 import { useAppDispatch } from '@lib/reduxHooks'
-import { logout } from '@/features/auth/authSlice'
+import { logoutUser } from '@/features/auth/authSlice'
 import { Bell, ChevronDown, Menu, MapPin, Settings, LogOut, User } from 'lucide-react'
 import { Button } from '@components/ui/button'
 import {
@@ -62,11 +64,17 @@ export function DashboardTopbar({
   const dispatch = useAppDispatch()
   const router = useRouter()
 
-  const handleLogout = () => {
-    // Dispatch logout action to clear auth state
-    dispatch(logout())
-    // Redirect to login page
-    router.push('/auth/login')
+  const handleLogout = async () => {
+    try {
+      // Dispatch logout action and wait for completion
+      await dispatch(logoutUser()).unwrap()
+      // Redirect to login page after successful logout
+      router.push('/auth/login')
+    } catch (error) {
+      console.error('Logout failed:', error)
+      // Even if logout fails, redirect to login page
+      router.push('/auth/login')
+    }
   }
 
   const handleProfileSettings = () => {
@@ -88,6 +96,19 @@ export function DashboardTopbar({
           >
             <Menu className="h-5 w-5" />
           </Button>
+
+          {/* Logo - Hidden on mobile, visible on larger screens */}
+          <Link href="/" className="hidden md:flex items-center">
+            <div className="relative h-8 w-24">
+              <Image
+                src="/Logo/big-logo.png"
+                alt="Kapas Beauty Spa"
+                fill
+                className="object-contain"
+                priority
+              />
+            </div>
+          </Link>
 
           {/* Branch Selector */}
           <div className="flex items-center space-x-2">
@@ -160,7 +181,13 @@ export function DashboardTopbar({
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="flex items-center space-x-2 px-3">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={user.avatar} alt={user.name} />
+                  <AvatarImage 
+                    src={user.avatar || "/placeholder-avatar.svg"} 
+                    alt={user.name}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = "/placeholder-avatar.svg";
+                    }}
+                  />
                   <AvatarFallback>
                     {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                   </AvatarFallback>

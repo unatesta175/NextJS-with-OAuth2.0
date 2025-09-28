@@ -23,12 +23,16 @@ import { Label } from '@components/ui/label'
 import { Avatar, AvatarFallback, AvatarImage } from '@components/ui/avatar'
 import { Badge } from '@components/ui/badge'
 import { Separator } from '@components/ui/separator'
-import { User, Mail, Phone, MapPin, Calendar, Settings } from 'lucide-react'
+import { User, Mail, Phone, MapPin, Calendar, Settings, Camera, Lock } from 'lucide-react'
+import { PasswordChangeModal } from '@components/ui/password-change-modal'
 
 export default function ProfilePage() {
   const { user } = useAppSelector(state => state.auth)
   const dispatch = useAppDispatch()
   const [isEditing, setIsEditing] = useState(false)
+  const [selectedImage, setSelectedImage] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
   
   const form = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
@@ -42,14 +46,38 @@ export default function ProfilePage() {
 
   const { formState: { isSubmitting } } = form
 
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const onSubmit = async (data: ProfileFormData) => {
     try {
       const profileData = {
         name: data.name,
-        phone: data.phone
+        phone: data.phone,
+        ...(selectedImage && { image: selectedImage })
       };
+      
+      console.log('Submitting dashboard profile update:', {
+        name: data.name,
+        phone: data.phone,
+        hasImage: !!selectedImage,
+        imageSize: selectedImage?.size,
+        imageName: selectedImage?.name
+      });
+      
       await dispatch(updateProfile(profileData)).unwrap();
       setIsEditing(false);
+      setSelectedImage(null);
+      setImagePreview(null);
     } catch (error) {
       console.error('Profile update failed:', error);
       form.setError("root", { 
@@ -65,6 +93,8 @@ export default function ProfilePage() {
 
   const handleCancel = () => {
     setIsEditing(false)
+    setSelectedImage(null)
+    setImagePreview(null)
     // Reset form data
     form.reset({
       name: user?.name || '',
@@ -98,12 +128,38 @@ export default function ProfilePage() {
             <Card>
               <CardContent className="pt-6">
                 <div className="flex flex-col items-center space-y-4">
-                  <Avatar className="h-24 w-24">
-                    <AvatarImage src={user?.avatar} />
-                    <AvatarFallback className="text-lg">
-                      {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
-                    </AvatarFallback>
-                  </Avatar>
+                  <div className="relative">
+                    <Avatar className="h-24 w-24">
+                      <AvatarImage 
+                        src={imagePreview || (user as any)?.image || "/placeholder-avatar.svg"} 
+                        alt={user?.name}
+                        onError={(e) => {
+                          console.log('Dashboard avatar image failed to load:', (user as any)?.image);
+                          (e.target as HTMLImageElement).src = "/placeholder-avatar.svg";
+                        }}
+                      />
+                      <AvatarFallback className="text-lg">
+                        {user?.name?.split(' ').map(n => n[0]).join('') || 'U'}
+                      </AvatarFallback>
+                    </Avatar>
+                    {isEditing && (
+                      <>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageChange}
+                          className="hidden"
+                          id="dashboard-image-upload"
+                        />
+                        <label
+                          htmlFor="dashboard-image-upload"
+                          className="absolute -bottom-2 -right-2 bg-[#ff0a85] text-white p-2 rounded-full hover:bg-[#ff0a85]/90 transition-colors cursor-pointer shadow-lg"
+                        >
+                          <Camera className="w-4 h-4" />
+                        </label>
+                      </>
+                    )}
+                  </div>
                   
                   <div className="text-center space-y-2">
                     <h3 className="text-xl font-semibold">{user?.name || 'User Name'}</h3>
@@ -252,7 +308,11 @@ export default function ProfilePage() {
                     <h4 className="font-medium">Password</h4>
                     <p className="text-sm text-gray-600">Last updated 3 months ago</p>
                   </div>
-                  <Button variant="outline" size="sm">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setShowPasswordModal(true)}
+                  >
                     Change Password
                   </Button>
                 </div>
@@ -270,6 +330,12 @@ export default function ProfilePage() {
             </Card>
           </div>
         </div>
+
+        {/* Password Change Modal */}
+        <PasswordChangeModal 
+          isOpen={showPasswordModal}
+          onClose={() => setShowPasswordModal(false)}
+        />
       </div>
   )
 }

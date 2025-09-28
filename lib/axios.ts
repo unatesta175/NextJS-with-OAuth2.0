@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { API_BASE_URL } from './config';
 
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api', // Laravel backend API
+  baseURL: `${API_BASE_URL}/api`, // Laravel backend API
   withCredentials: true, // Include cookies in requests
   headers: {
     'Content-Type': 'application/json',

@@ -7,7 +7,16 @@ const nextConfig: NextConfig = {
  
   // Ensure proper handling of external resources
   images: {
-    domains: ['fonts.gstatic.com'],
+    unoptimized: true, // Disable image optimization for development
+    domains: ['fonts.gstatic.com', 'localhost', 'lh3.googleusercontent.com'],
+    remotePatterns: [
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+        port: '8000',
+        pathname: '/**',
+      },
+    ],
     localPatterns: [
       {
         pathname: '/api/placeholder/**',

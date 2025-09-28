@@ -1,6 +1,10 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { useAppSelector, useAppDispatch } from '@lib/reduxHooks'
+import { fetchUsers, createUser, updateUser, deleteUser } from '@/features/admin/adminSlice'
+import { User as ApiUser } from '@/features/admin/api'
+import { showConfirmationToast, showUpdateConfirmationToast } from '@lib/toast'
 // DashboardLayout is now handled by layout.tsx
 import {
   Table,
@@ -50,130 +54,56 @@ import {
   UserPlus
 } from 'lucide-react'
 
-interface User {
-  id: string
-  name: string
-  email: string
-  phone: string
-  role: 'client' | 'staff' | 'admin'
-  status: 'active' | 'inactive'
-  joinedDate: string
-  avatar?: string
-  lastLogin?: string
-  totalBookings?: number
-}
-
-// Sample users data
-const usersData: User[] = [
-  {
-    id: 'U001',
-    name: 'Sarah Johnson',
-    email: 'sarah@email.com',
-    phone: '+60123456789',
-    role: 'client',
-    status: 'active',
-    joinedDate: '2024-01-15',
-    lastLogin: '2024-01-20',
-    totalBookings: 5
-  },
-  {
-    id: 'U002',
-    name: 'Maya Chen',
-    email: 'maya@kapasbeauty.com',
-    phone: '+60123456790',
-    role: 'staff',
-    status: 'active',
-    joinedDate: '2023-06-01',
-    lastLogin: '2024-01-20'
-  },
-  {
-    id: 'U003',
-    name: 'Lisa Wong',
-    email: 'lisa@kapasbeauty.com',
-    phone: '+60123456791',
-    role: 'staff',
-    status: 'active',
-    joinedDate: '2023-08-15',
-    lastLogin: '2024-01-19'
-  },
-  {
-    id: 'U004',
-    name: 'Admin User',
-    email: 'admin@kapasbeauty.com',
-    phone: '+60123456792',
-    role: 'admin',
-    status: 'active',
-    joinedDate: '2023-01-01',
-    lastLogin: '2024-01-20'
-  },
-  {
-    id: 'U005',
-    name: 'Maria Lim',
-    email: 'maria@email.com',
-    phone: '+60123456793',
-    role: 'client',
-    status: 'active',
-    joinedDate: '2024-01-10',
-    lastLogin: '2024-01-18',
-    totalBookings: 3
-  },
-  {
-    id: 'U006',
-    name: 'John Doe',
-    email: 'john@email.com',
-    phone: '+60123456794',
-    role: 'client',
-    status: 'inactive',
-    joinedDate: '2023-12-20',
-    lastLogin: '2024-01-05',
-    totalBookings: 1
-  }
-]
+// Use the API User interface
+type User = ApiUser;
 
 const roleConfig = {
   client: { label: 'Client', color: 'bg-blue-100 text-blue-800' },
-  staff: { label: 'Staff', color: 'bg-purple-100 text-purple-800' },
+  therapist: { label: 'Therapist', color: 'bg-purple-100 text-purple-800' },
   admin: { label: 'Admin', color: 'bg-red-100 text-red-800' }
 }
 
-const statusConfig = {
-  active: { label: 'Active', color: 'bg-green-100 text-green-800' },
-  inactive: { label: 'Inactive', color: 'bg-gray-100 text-gray-800' }
-}
-
 export default function UsersPage() {
+  const dispatch = useAppDispatch()
+  const { users } = useAppSelector((state) => state.admin)
+  const loading = users.loading
+  const { user: currentUser } = useAppSelector((state) => state.auth)
+  
   const [searchTerm, setSearchTerm] = useState('')
   const [roleFilter, setRoleFilter] = useState<string>('all')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
-  const [isSaving, setIsSaving] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     phone: '',
-    role: 'client' as User['role'],
-    status: 'active' as User['status']
+    role: 'client' as 'admin' | 'therapist' | 'client',
+    password: '',
+    password_confirmation: ''
   })
 
+  // Check if current user is admin
+  const isAdmin = currentUser?.role === 'admin'
 
-  // Filter and search users
-  const filteredUsers = usersData.filter(user => {
-    const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.id.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    const matchesRole = roleFilter === 'all' || user.role === roleFilter
-    const matchesStatus = statusFilter === 'all' || user.status === statusFilter
-    
-    return matchesSearch && matchesRole && matchesStatus
-  })
+  // Fetch users on component mount and when filters change
+  useEffect(() => {
+    if (isAdmin) {
+      const params = {
+        page: currentPage,
+        per_page: pageSize,
+        ...(searchTerm && { search: searchTerm }),
+        ...(roleFilter !== 'all' && { role: roleFilter }),
+      }
+      dispatch(fetchUsers(params))
+    }
+  }, [dispatch, currentPage, pageSize, searchTerm, roleFilter, isAdmin])
 
-  // Pagination
-  const totalPages = Math.ceil(filteredUsers.length / pageSize)
-  const paginatedUsers = filteredUsers.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+
+  // Use data from Redux store (already filtered and paginated by API)
+  const displayUsers = users.data || []
+  const totalPages = users.pagination ? users.pagination.last_page : 1
 
   const handleAddUser = () => {
     setEditingUser(null)
@@ -182,7 +112,8 @@ export default function UsersPage() {
       email: '',
       phone: '',
       role: 'client',
-      status: 'active'
+      password: '',
+      password_confirmation: ''
     })
     setIsDialogOpen(true)
   }
@@ -192,41 +123,70 @@ export default function UsersPage() {
     setFormData({
       name: user.name,
       email: user.email,
-      phone: user.phone,
+      phone: user.phone || '',
       role: user.role,
-      status: user.status
+      password: '',
+      password_confirmation: ''
     })
     setIsDialogOpen(true)
   }
 
   const handleSaveUser = async () => {
-    setIsSaving(true)
     try {
-      // TODO: Implement save user logic
-      console.log('Save user:', formData)
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      if (editingUser) {
+        // Update existing user
+        const updateData: any = { ...formData }
+        if (!updateData.password) {
+          delete updateData.password
+          delete updateData.password_confirmation
+        }
+        await dispatch(updateUser({ id: editingUser.id, userData: updateData })).unwrap()
+      } else {
+        // Create new user
+        await dispatch(createUser({ ...formData, password_confirmation: formData.password })).unwrap()
+      }
       setIsDialogOpen(false)
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        role: 'client',
+        password: '',
+        password_confirmation: ''
+      })
     } catch (error) {
       console.error('Failed to save user:', error)
-    } finally {
-      setIsSaving(false)
     }
   }
 
   const handleDeleteUser = (user: User) => {
-    // TODO: Implement delete user logic with confirmation
-    console.log('Delete user:', user.id)
-  }
-
-  const handleStatusToggle = (user: User) => {
-    // TODO: Implement status toggle
-    console.log('Toggle status for user:', user.id)
+    showConfirmationToast(
+      `Are you sure you want to delete ${user.name}? This action cannot be undone.`,
+      async () => {
+        try {
+          await dispatch(deleteUser(user.id)).unwrap()
+        } catch (error) {
+          console.error('Failed to delete user:', error)
+        }
+      }
+    )
   }
 
   const handleExport = () => {
     // TODO: Implement export functionality
     console.log('Export users data')
+  }
+
+  // Show access denied if not admin
+  if (!isAdmin) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
+          <p className="text-gray-600">You don't have permission to access user management.</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -271,19 +231,6 @@ export default function UsersPage() {
                 </SelectContent>
               </Select>
 
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  {Object.entries(statusConfig).map(([value, config]) => (
-                    <SelectItem key={value} value={value}>
-                      {config.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
 
             <Button variant="outline" onClick={handleExport}>
@@ -294,25 +241,28 @@ export default function UsersPage() {
 
           {/* Table */}
           <div className="border rounded-lg">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>User</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Joined Date</TableHead>
-                  <TableHead>Last Login</TableHead>
-                  <TableHead>Bookings</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginatedUsers.map((user) => (
+            {loading ? (
+              <div className="flex justify-center items-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#ff0a85]"></div>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>User</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Email Verified</TableHead>
+                    <TableHead>Created Date</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {displayUsers.map((user) => (
                   <TableRow key={user.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-10 w-10">
-                          <AvatarImage src={user.avatar} />
+                          <AvatarImage src={user.image} />
                           <AvatarFallback>
                             {user.name.split(' ').map(n => n[0]).join('')}
                           </AvatarFallback>
@@ -320,7 +270,7 @@ export default function UsersPage() {
                         <div>
                           <div className="font-medium">{user.name}</div>
                           <div className="text-sm text-gray-500">{user.email}</div>
-                          <div className="text-sm text-gray-500">{user.phone}</div>
+                          <div className="text-sm text-gray-500">{user.phone || 'No phone'}</div>
                         </div>
                       </div>
                     </TableCell>
@@ -330,24 +280,13 @@ export default function UsersPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Badge className={statusConfig[user.status].color}>
-                          {statusConfig[user.status].label}
-                        </Badge>
-                        <Switch
-                          checked={user.status === 'active'}
-                          onCheckedChange={() => handleStatusToggle(user)}
-                        />
-                      </div>
+                      {user.email_verified_at ? 
+                        <Badge className="bg-green-100 text-green-800">Verified</Badge> : 
+                        <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>
+                      }
                     </TableCell>
                     <TableCell>
-                      {new Date(user.joinedDate).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Never'}
-                    </TableCell>
-                    <TableCell>
-                      {user.role === 'client' ? user.totalBookings || 0 : '-'}
+                      {new Date(user.created_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
                       <DropdownMenu>
@@ -378,53 +317,56 @@ export default function UsersPage() {
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </div>
 
           {/* Pagination */}
-          <div className="flex items-center justify-between mt-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500">Show</span>
-              <Select value={pageSize.toString()} onValueChange={(value) => setPageSize(Number(value))}>
-                <SelectTrigger className="w-20">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="25">25</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                </SelectContent>
-              </Select>
-              <span className="text-sm text-gray-500">
-                of {filteredUsers.length} results
-              </span>
-            </div>
+          {!loading && users.pagination && (
+            <div className="flex items-center justify-between mt-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">Show</span>
+                <Select value={pageSize.toString()} onValueChange={(value) => setPageSize(Number(value))}>
+                  <SelectTrigger className="w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-sm text-gray-500">
+                  of {users.pagination.total} results
+                </span>
+              </div>
 
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-              >
-                Previous
-              </Button>
-              <span className="text-sm text-gray-500">
-                Page {currentPage} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-              >
-                Next
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm text-gray-500">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Add/Edit User Dialog */}
@@ -478,38 +420,52 @@ export default function UsersPage() {
                 <Label htmlFor="role" className="text-right">
                   Role
                 </Label>
-                <Select value={formData.role} onValueChange={(value: User['role']) => setFormData({...formData, role: value})}>
+                <Select value={formData.role} onValueChange={(value: 'admin' | 'therapist' | 'client') => setFormData({...formData, role: value})}>
                   <SelectTrigger className="col-span-3">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="client">Client</SelectItem>
-                    <SelectItem value="staff">Staff</SelectItem>
+                    <SelectItem value="therapist">Therapist</SelectItem>
                     <SelectItem value="admin">Admin</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="status" className="text-right">
-                  Status
+                <Label htmlFor="password" className="text-right">
+                  {editingUser ? 'New Password' : 'Password'}
                 </Label>
-                <Select value={formData.status} onValueChange={(value: User['status']) => setFormData({...formData, status: value})}>
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Input
+                  id="password"
+                  type="password"
+                  value={formData.password}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, password: e.target.value})}
+                  className="col-span-3"
+                  placeholder={editingUser ? 'Leave empty to keep current password' : 'Enter password'}
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="password_confirmation" className="text-right">
+                  Confirm Password
+                </Label>
+                <Input
+                  id="password_confirmation"
+                  type="password"
+                  value={formData.password_confirmation}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, password_confirmation: e.target.value})}
+                  className="col-span-3"
+                  placeholder="Confirm password"
+                />
               </div>
             </div>
             <DialogFooter>
               <Button 
                 type="submit" 
                 onClick={handleSaveUser}
-                loading={isSaving}
+                disabled={loading}
+                className="bg-[#ff0a85] hover:bg-[#ff0a85]/90"
               >
+                {loading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>}
                 {editingUser ? 'Update User' : 'Create User'}
               </Button>
             </DialogFooter>

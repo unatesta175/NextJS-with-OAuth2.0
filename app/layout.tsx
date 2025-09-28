@@ -12,6 +12,11 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Kapas Beauty Spa",
   description: "Kapas Beauty Spa Booking System",
+  icons: {
+    icon: "/Logo/favicon.png",
+    shortcut: "/Logo/favicon.png",
+    apple: "/Logo/favicon.png",
+  },
 };
 
 export default function RootLayout({

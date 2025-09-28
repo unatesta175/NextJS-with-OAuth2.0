@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
 import { Button } from "@components/ui/button";
 import { Input } from "@components/ui/input";
@@ -47,11 +48,16 @@ const Header = () => {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-              <span className="text-white font-bold text-sm">K</span>
+          <Link href="/" className="flex items-center">
+            <div className="relative h-10 w-32">
+              <Image
+                src="/Logo/big-logo.png"
+                alt="Kapas Beauty Spa"
+                fill
+                className="object-contain"
+                priority
+              />
             </div>
-            <span className="text-xl font-bold text-gray-900">Kapas</span>
           </Link>
 
           {/* Desktop Navigation */}
@@ -111,7 +117,13 @@ const Header = () => {
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Avatar className="w-8 h-8 cursor-pointer hover:ring-2 hover:ring-primary hover:ring-offset-2 transition-all">
-                        <AvatarImage src="/placeholder-avatar.svg" alt={user?.name} />
+                        <AvatarImage 
+                          src={(user as any)?.image || "/placeholder-avatar.svg"} 
+                          alt={user?.name}
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = "/placeholder-avatar.svg";
+                          }}
+                        />
                         <AvatarFallback className="bg-primary text-white">
                           {user?.name?.charAt(0).toUpperCase()}
                         </AvatarFallback>

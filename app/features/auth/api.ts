@@ -30,6 +30,50 @@ export const authApi = {
   refreshToken: async () => {
     const response = await api.post('/auth/refresh');
     return response.data;
+  },
+
+  googleLogin: async (googleData: {
+    token: string;
+    email: string;
+    name: string;
+    google_id: string;
+    avatar?: string;
+  }) => {
+    const response = await api.post('/auth/google', googleData);
+    return response.data;
+  },
+
+  forgotPassword: async (email: string) => {
+    const response = await api.post('/auth/forgot-password', { email });
+    return response.data;
+  },
+
+  resetPassword: async (resetData: {
+    token: string;
+    email: string;
+    password: string;
+    password_confirmation: string;
+  }) => {
+    const response = await api.post('/auth/reset-password', resetData);
+    return response.data;
+  },
+
+  updateProfile: async (formData: FormData) => {
+    const response = await api.post('/auth/profile', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  changePassword: async (passwordData: {
+    current_password: string;
+    password: string;
+    password_confirmation: string;
+  }) => {
+    const response = await api.put('/auth/change-password', passwordData);
+    return response.data;
   }
 };
 
@@ -80,5 +124,54 @@ export async function logoutApi() {
   } catch {
     // Even if logout fails on server, we'll clear local storage
     return true;
+  }
+}
+
+// Google OAuth API
+export async function googleLoginApi(googleData: {
+  token: string;
+  email: string;
+  name: string;
+  google_id: string;
+  avatar?: string;
+}) {
+  try {
+    return await authApi.googleLogin(googleData);
+  } catch (error: unknown) {
+    const axiosError = error as { response?: { data?: { message?: string } } };
+    if (axiosError.response?.data?.message) {
+      throw new Error(axiosError.response.data.message);
+    }
+    throw new Error('Google login failed');
+  }
+}
+
+// Password Reset APIs
+export async function forgotPasswordApi(email: string) {
+  try {
+    return await authApi.forgotPassword(email);
+  } catch (error: unknown) {
+    const axiosError = error as { response?: { data?: { message?: string } } };
+    if (axiosError.response?.data?.message) {
+      throw new Error(axiosError.response.data.message);
+    }
+    throw new Error('Failed to send password reset email');
+  }
+}
+
+export async function resetPasswordApi(resetData: {
+  token: string;
+  email: string;
+  password: string;
+  password_confirmation: string;
+}) {
+  try {
+    return await authApi.resetPassword(resetData);
+  } catch (error: unknown) {
+    const axiosError = error as { response?: { data?: { message?: string } } };
+    if (axiosError.response?.data?.message) {
+      throw new Error(axiosError.response.data.message);
+    }
+    throw new Error('Password reset failed');
   }
 }

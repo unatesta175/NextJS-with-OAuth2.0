@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Input } from "@components/ui/input";
 import { Button } from "@components/ui/button";
+import GoogleLoginButton from "@components/ui/google-login-button";
 
 const schema = z.object({
   email: z.string().email(),
@@ -79,9 +80,27 @@ export default function LoginPage() {
           )}
         </div>
         {errors.root && <p className="text-red-500 text-sm">{errors.root.message}</p>}
+        <div className="text-right text-sm mb-4">
+          <a href="/auth/forgot-password" className="text-blue-600 hover:text-blue-500 underline">
+            Forgot your password?
+          </a>
+        </div>
+        
         <Button type="submit" loading={isSubmitting || loading} className="w-full">
           Login
         </Button>
+        
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+          </div>
+        </div>
+
+        <GoogleLoginButton className="mb-4" />
+        
         <div className="text-center text-sm mt-2">
           Don&apos;t have an account? <a href="/auth/register" className="underline">Register</a>
         </div>

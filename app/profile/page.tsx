@@ -11,9 +11,10 @@ import { Label } from "@components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@components/ui/avatar";
 import { Badge } from "@components/ui/badge";
 import { Skeleton } from "@components/ui/skeleton";
-import { User, Mail, Phone, Camera, Save, Edit } from "lucide-react";
+import { User, Mail, Phone, Camera, Save, Edit, Lock } from "lucide-react";
 import { useAppSelector, useAppDispatch } from "@lib/reduxHooks";
 import { updateProfile } from "@/features/auth/authSlice";
+import { PasswordChangeModal } from "@components/ui/password-change-modal";
 
 const profileSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -26,6 +27,9 @@ export default function ProfilePage() {
   const { user, isAuthenticated, loading } = useAppSelector((state) => state.auth);
   const dispatch = useAppDispatch();
   const [isEditing, setIsEditing] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
 
   const form = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
@@ -36,6 +40,18 @@ export default function ProfilePage() {
   });
 
   const { formState: { isSubmitting, errors }, handleSubmit, register, setError, reset } = form;
+
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // Sync form data when user data becomes available
   useEffect(() => {
@@ -51,10 +67,13 @@ export default function ProfilePage() {
     try {
       const profileData = {
         name: data.name,
-        phone: data.phone
+        phone: data.phone,
+        ...(selectedImage && { image: selectedImage })
       };
       await dispatch(updateProfile(profileData)).unwrap();
       setIsEditing(false);
+      setSelectedImage(null);
+      setImagePreview(null);
     } catch (error: unknown) {
       setError("root", { 
         type: "manual", 
@@ -76,6 +95,8 @@ export default function ProfilePage() {
       });
     }
     setIsEditing(false);
+    setSelectedImage(null);
+    setImagePreview(null);
   };
 
   // Show loading skeleton while checking authentication
@@ -181,15 +202,34 @@ export default function ProfilePage() {
               <div className="flex items-center space-x-6">
                 <div className="relative">
                   <Avatar className="w-20 h-20">
-                    <AvatarImage src="/placeholder-avatar.jpg" alt={user?.name} />
+                    <AvatarImage 
+                      src={imagePreview || (user as any)?.image || "/placeholder-avatar.svg"} 
+                      alt={user?.name}
+                      onError={(e) => {
+                        console.log('Avatar image failed to load:', (user as any)?.image);
+                        (e.target as HTMLImageElement).src = "/placeholder-avatar.svg";
+                      }}
+                    />
                     <AvatarFallback className="bg-primary text-white text-xl">
                       {user?.name?.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   {isEditing && (
-                    <button className="absolute -bottom-2 -right-2 bg-primary text-white p-2 rounded-full hover:bg-primary/90 transition-colors">
-                      <Camera className="w-3 h-3" />
-                    </button>
+                    <>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageChange}
+                        className="hidden"
+                        id="image-upload"
+                      />
+                      <label
+                        htmlFor="image-upload"
+                        className="absolute -bottom-2 -right-2 bg-primary text-white p-2 rounded-full hover:bg-primary/90 transition-colors cursor-pointer"
+                      >
+                        <Camera className="w-3 h-3" />
+                      </label>
+                    </>
                   )}
                 </div>
                 <div>
@@ -200,13 +240,6 @@ export default function ProfilePage() {
                   </Badge>
                 </div>
               </div>
-
-              {/* Error Display */}
-              {errors.root && (
-                <div className="bg-red-50 border border-red-200 rounded-md p-4">
-                  <p className="text-red-800 text-sm">{errors.root.message}</p>
-                </div>
-              )}
 
               {/* Form Fields */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -293,13 +326,16 @@ export default function ProfilePage() {
 
           {/* Quick Actions */}
           <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card className="hover:shadow-md transition-shadow cursor-pointer">
+            <Card 
+              className="hover:shadow-md transition-shadow cursor-pointer"
+              onClick={() => setShowPasswordModal(true)}
+            >
               <CardContent className="p-6 text-center">
                 <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <User className="w-6 h-6 text-primary" />
+                  <Lock className="w-6 h-6 text-primary" />
                 </div>
-                <h3 className="font-semibold mb-2">Update Password</h3>
-                <p className="text-sm text-gray-600">Change your account password for security</p>
+                <h3 className="font-semibold mb-2">Change Password</h3>
+                <p className="text-sm text-gray-600">Update your account password for security</p>
               </CardContent>
             </Card>
 
@@ -313,6 +349,12 @@ export default function ProfilePage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Password Change Modal */}
+          <PasswordChangeModal 
+            isOpen={showPasswordModal}
+            onClose={() => setShowPasswordModal(false)}
+          />
         </div>
       </div>
     </div>

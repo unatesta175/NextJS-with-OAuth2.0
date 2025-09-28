@@ -51,7 +51,8 @@ export function DashboardLayout({
             user={user ? {
               name: user.name,
               email: user.email,
-              role: userRole
+              role: userRole,
+              avatar: (user as any).image
             } : undefined}
             selectedBranch={selectedBranch}
             onBranchChange={onBranchChange}

@@ -3,6 +3,8 @@ import { ReactNode, useEffect } from "react";
 import { Provider as ReduxProvider } from "react-redux";
 import { useAppDispatch } from '@lib/reduxHooks';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Toaster } from "react-hot-toast";
+import GoogleOAuthWrapper from '@lib/google-oauth';
 import { store } from "./store";
 import { checkAuthStatus } from "@/features/auth/authSlice";
 
@@ -21,10 +23,35 @@ function AuthLoader() {
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <ReduxProvider store={store}>
-      <QueryClientProvider client={queryClient}>
-        <AuthLoader />
-        {children}
-      </QueryClientProvider>
+      <GoogleOAuthWrapper>
+        <QueryClientProvider client={queryClient}>
+          <AuthLoader />
+          {children}
+        <Toaster 
+          position="top-right"
+          reverseOrder={false}
+          gutter={8}
+          containerClassName=""
+          containerStyle={{}}
+          toastOptions={{
+            // Define default options
+            className: '',
+            duration: 4000,
+            style: {
+              background: '#363636',
+              color: '#fff',
+            },
+            // Default options for specific types
+            success: {
+              duration: 3000,
+            },
+            error: {
+              duration: 4000,
+            },
+          }}
+        />
+        </QueryClientProvider>
+      </GoogleOAuthWrapper>
     </ReduxProvider>
   );
 }
