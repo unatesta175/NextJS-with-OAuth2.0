@@ -2,15 +2,16 @@
 
 import React from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { 
   LayoutDashboard, 
   Calendar, 
   Users, 
   Package, 
-  MapPin, 
   ShoppingBag, 
   Tag, 
+  Tags,
   Star, 
   BarChart3,
   ClipboardList,
@@ -37,9 +38,9 @@ const adminNavItems = [
   { label: 'Calendar/Bookings', href: '/dashboard/bookings', icon: Calendar },
   { label: 'Users', href: '/dashboard/users', icon: Users },
   { label: 'Services', href: '/dashboard/services', icon: Package },
-  { label: 'Branches', href: '/dashboard/branches', icon: MapPin },
   { label: 'Products', href: '/dashboard/products', icon: ShoppingBag },
   { label: 'Categories', href: '/dashboard/categories', icon: Tag },
+  { label: 'Tags', href: '/dashboard/tags', icon: Tags },
   { label: 'Reviews', href: '/dashboard/reviews', icon: Star },
   { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
 ]
@@ -65,18 +66,19 @@ export function DashboardSidebar({ userRole, isCollapsed = false, onToggle }: Da
         "w-64"
       )}>
         {/* Logo Section */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-r from-pink-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">K</span>
-            </div>
-            <span className="text-xl font-bold text-gray-800">Kapas Beauty</span>
-          </div>
+        <div className="relative flex items-center justify-center p-4 border-b border-gray-200">
+          <Image 
+            src="/logo/big-logo.png" 
+            alt="Kapas Beauty Logo" 
+            width={90} 
+            height={40}
+            className="object-contain"
+          />
           <Button
             variant="ghost"
             size="sm"
             onClick={onToggle}
-            className="lg:hidden"
+            className="lg:hidden absolute right-4"
           >
             <X className="h-4 w-4" />
           </Button>

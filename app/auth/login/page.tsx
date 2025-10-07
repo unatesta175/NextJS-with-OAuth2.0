@@ -11,8 +11,8 @@ import { Button } from "@components/ui/button";
 import GoogleLoginButton from "@components/ui/google-login-button";
 
 const schema = z.object({
-  email: z.string().email(),
-  password: z.string().min(6),
+  email: z.string().email("incorrect email format"),
+  password: z.string().min(6, "Password must be at least 6 characters long"),
 });
 
 type LoginForm = z.infer<typeof schema>;
@@ -34,11 +34,8 @@ export default function LoginPage() {
   const onSubmit = async (data: LoginForm) => {
     try {
       await dispatch(login(data)).unwrap();
-    } catch (error: unknown) {
-      setError("root", { 
-        type: "manual", 
-        message: error instanceof Error ? error.message : "Login failed" 
-      });
+    } catch{
+      
     }
   };
 
@@ -79,7 +76,7 @@ export default function LoginPage() {
             <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>
           )}
         </div>
-        {errors.root && <p className="text-red-500 text-sm">{errors.root.message}</p>}
+        {/* {errors.root && <p className="text-red-500 text-sm">{errors.root.message}</p>} */}
         <div className="text-right text-sm mb-4">
           <a href="/auth/forgot-password" className="text-blue-600 hover:text-blue-500 underline">
             Forgot your password?

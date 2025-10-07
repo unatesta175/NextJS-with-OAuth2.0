@@ -1,7 +1,10 @@
 'use client'
 
-import React, { useState } from 'react'
-// DashboardLayout is now handled by layout.tsx
+import React, { useState, useEffect, useCallback } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import * as z from 'zod'
+import axios from '@lib/axios'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@components/ui/table'
 import { Button } from '@components/ui/button'
 import { Input } from '@components/ui/input'
@@ -11,149 +14,241 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@components/ui/label'
 import { Textarea } from '@components/ui/textarea'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@components/ui/dropdown-menu'
-import { MoreHorizontal, Search, Download, Plus, Edit, Trash2, Tag, GripVertical } from 'lucide-react'
+import { MoreHorizontal, Search, Plus, Edit, Trash2, Tag, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react'
+import { showSuccessToast, showErrorToast } from '@lib/toast'
 
-interface Category {
-  id: string
+interface ServiceCategory {
+  id: number
   name: string
-  description: string
-  servicesCount: number
-  status: 'active' | 'inactive'
-  order: number
-  color?: string
+  description: string | null
+  image: string | null
+  is_active: boolean
+  services?: any[]
+  tags?: any[]
+  created_at: string
+  updated_at: string
 }
 
-const categoriesData: Category[] = [
-  { id: 'facial', name: 'Facial Treatment', description: 'Professional facial services for all skin types', servicesCount: 8, status: 'active', order: 1, color: '#ff0a85' },
-  { id: 'body', name: 'Body Treatment', description: 'Relaxing body treatments and massages', servicesCount: 12, status: 'active', order: 2, color: '#8b5cf6' },
-  { id: 'hair', name: 'Hair Care', description: 'Hair styling and treatment services', servicesCount: 6, status: 'active', order: 3, color: '#06d6a0' },
-  { id: 'nail', name: 'Nail Care', description: 'Manicure and pedicure services', servicesCount: 5, status: 'active', order: 4, color: '#f59e0b' },
-  { id: 'eye', name: 'Eye Treatment', description: 'Specialized eye area treatments', servicesCount: 3, status: 'inactive', order: 5, color: '#3b82f6' }
-]
+const categorySchema = z.object({
+  name: z.string().min(1, 'Category name is required').max(255, 'Name too long'),
+  description: z.string().optional().nullable(),
+  image: z.string().optional().nullable(),
+  is_active: z.boolean(),
+})
+
+type CategoryFormData = z.infer<typeof categorySchema>
 
 const statusConfig = {
-  active: { label: 'Active', color: 'bg-green-100 text-green-800' },
-  inactive: { label: 'Inactive', color: 'bg-gray-100 text-gray-800' }
+  true: { label: 'Active', color: 'bg-green-100 text-green-800' },
+  false: { label: 'Inactive', color: 'bg-gray-100 text-gray-800' }
 }
 
 export default function CategoriesPage() {
+  const [categories, setCategories] = useState<ServiceCategory[]>([])
+  const [isLoading, setIsLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null)
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    status: 'active' as Category['status'],
-    color: '#ff0a85'
+  const [editingCategory, setEditingCategory] = useState<ServiceCategory | null>(null)
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [total, setTotal] = useState(0)
+  const perPage = 10
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { errors, isSubmitting }
+  } = useForm<CategoryFormData>({
+    resolver: zodResolver(categorySchema),
+    defaultValues: {
+      name: '',
+      description: '',
+      image: '',
+      is_active: true
+    }
   })
 
+  const isActive = watch('is_active')
 
-  const filteredCategories = categoriesData.filter(category => {
-    const matchesSearch = category.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         category.description.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === 'all' || category.status === statusFilter
-    return matchesSearch && matchesStatus
-  }).sort((a, b) => a.order - b.order)
+  const fetchCategories = useCallback(async () => {
+    setIsLoading(true)
+    try {
+      const response = await axios.get('/admin/service-categories', {
+        params: {
+          page: currentPage,
+          per_page: perPage,
+          search: searchTerm || undefined
+        }
+      })
+      setCategories(response.data.data || [])
+      setTotalPages(response.data.last_page || 1)
+      setTotal(response.data.total || 0)
+    } catch (error: any) {
+      console.error('Failed to fetch categories:', error)
+      showErrorToast(error.response?.data?.message || 'Failed to fetch categories')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [currentPage, searchTerm])
+
+  useEffect(() => {
+    fetchCategories()
+  }, [fetchCategories])
 
   const handleAddCategory = () => {
     setEditingCategory(null)
-    setFormData({ name: '', description: '', status: 'active', color: '#ff0a85' })
-    setIsDialogOpen(true)
-  }
-
-  const handleEditCategory = (category: Category) => {
-    setEditingCategory(category)
-    setFormData({
-      name: category.name,
-      description: category.description,
-      status: category.status,
-      color: category.color || '#ff0a85'
+    reset({
+      name: '',
+      description: '',
+      image: '',
+      is_active: true
     })
     setIsDialogOpen(true)
   }
 
-  const handleSaveCategory = async () => {
+  const handleEditCategory = (category: ServiceCategory) => {
+    setEditingCategory(category)
+    reset({
+      name: category.name,
+      description: category.description || '',
+      image: category.image || '',
+      is_active: category.is_active
+    })
+    setIsDialogOpen(true)
+  }
+
+  const onSubmit = async (data: CategoryFormData) => {
     try {
-      setIsSubmitting(true)
-      console.log('Save category:', formData)
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      if (editingCategory) {
+        await axios.put(`/admin/service-categories/${editingCategory.id}`, data)
+        showSuccessToast('Category updated successfully!')
+      } else {
+        await axios.post('/admin/service-categories', data)
+        showSuccessToast('Category created successfully!')
+      }
       setIsDialogOpen(false)
-    } catch (error) {
+      fetchCategories()
+    } catch (error: any) {
       console.error('Failed to save category:', error)
-    } finally {
-      setIsSubmitting(false)
+      showErrorToast(error.response?.data?.message || 'Failed to save category')
     }
   }
 
+  const handleDeleteCategory = async (category: ServiceCategory) => {
+    if (!confirm(`Are you sure you want to delete "${category.name}"?`)) {
+      return
+    }
+
+    try {
+      await axios.delete(`/admin/service-categories/${category.id}`)
+      showSuccessToast('Category deleted successfully!')
+      fetchCategories()
+    } catch (error: any) {
+      console.error('Failed to delete category:', error)
+      showErrorToast(error.response?.data?.message || 'Failed to delete category')
+    }
+  }
+
+  const handleToggleStatus = async (category: ServiceCategory) => {
+    try {
+      await axios.put(`/admin/service-categories/${category.id}`, {
+        name: category.name,
+        is_active: !category.is_active
+      })
+      showSuccessToast('Category status updated!')
+      fetchCategories()
+    } catch (error: any) {
+      console.error('Failed to update status:', error)
+      showErrorToast('Failed to update status')
+    }
+  }
+
+  const filteredCategories = categories.filter(category => {
+    const matchesStatus = statusFilter === 'all' || 
+                         (statusFilter === 'active' && category.is_active) ||
+                         (statusFilter === 'inactive' && !category.is_active)
+    return matchesStatus
+  })
+
   return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Categories Management</h1>
-            <p className="text-gray-600 mt-1">Manage service categories and organization</p>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Service Categories</h1>
+          <p className="text-gray-600 mt-1">Manage service categories and organization</p>
+        </div>
+        <Button onClick={handleAddCategory} className="bg-[#ff0a85] hover:bg-[#ff0a85]/90">
+          <Plus className="h-4 w-4 mr-2" />
+          Add Category
+        </Button>
+      </div>
+
+      <div className="bg-white rounded-lg border p-6">
+        <div className="flex flex-col lg:flex-row gap-4 items-center justify-between mb-6">
+          <div className="flex gap-4 flex-1">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                placeholder="Search categories..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 w-64"
+              />
+            </div>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2 border rounded-md"
+            >
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
           </div>
-          <Button onClick={handleAddCategory} className="bg-[#ff0a85] hover:bg-[#ff0a85]/90">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Category
+          <Button variant="outline" onClick={fetchCategories} disabled={isLoading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
           </Button>
         </div>
 
-        <div className="bg-white rounded-lg border p-6">
-          <div className="flex flex-col lg:flex-row gap-4 items-center justify-between mb-6">
-            <div className="flex gap-4 flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <Input
-                  placeholder="Search categories..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-64"
-                />
-              </div>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-2 border rounded-md"
-              >
-                <option value="all">All Status</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
-            <Button variant="outline">
-              <Download className="h-4 w-4 mr-2" />
-              Export
-            </Button>
-          </div>
-
-          <div className="border rounded-lg">
-            <Table>
-              <TableHeader>
+        <div className="border rounded-lg">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Category</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Services</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
                 <TableRow>
-                  <TableHead className="w-12"></TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Services Count</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                    <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2" />
+                    Loading categories...
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredCategories.map((category) => (
+              ) : filteredCategories.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                    No categories found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredCategories.map((category) => (
                   <TableRow key={category.id}>
                     <TableCell>
-                      <GripVertical className="h-4 w-4 text-gray-400 cursor-move" />
-                    </TableCell>
-                    <TableCell>
                       <div className="flex items-center gap-3">
-                        <div 
-                          className="w-8 h-8 rounded-full flex items-center justify-center"
-                          style={{ backgroundColor: category.color }}
-                        >
-                          <Tag className="h-4 w-4 text-white" />
+                        <div className="w-10 h-10 rounded-lg bg-[#ff0a85]/10 flex items-center justify-center">
+                          <Tag className="h-5 w-5 text-[#ff0a85]" />
                         </div>
                         <div>
                           <div className="font-medium">{category.name}</div>
@@ -162,26 +257,29 @@ export default function CategoriesPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="max-w-xs">
-                        <p className="text-sm text-gray-600 line-clamp-2">{category.description}</p>
+                      <div className="max-w-md">
+                        <p className="text-sm text-gray-600 line-clamp-2">
+                          {category.description || 'No description'}
+                        </p>
                       </div>
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary">
-                        {category.servicesCount} services
+                        {category.services?.length || 0} services
                       </Badge>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Badge className={statusConfig[category.status].color}>
-                          {statusConfig[category.status].label}
+                        <Badge className={statusConfig[category.is_active.toString() as 'true' | 'false'].color}>
+                          {statusConfig[category.is_active.toString() as 'true' | 'false'].label}
                         </Badge>
                         <Switch
-                          checked={category.status === 'active'}
+                          checked={category.is_active}
+                          onCheckedChange={() => handleToggleStatus(category)}
                         />
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" className="h-8 w-8 p-0">
@@ -195,7 +293,10 @@ export default function CategoriesPage() {
                             Edit
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-red-600">
+                          <DropdownMenuItem 
+                            className="text-red-600"
+                            onClick={() => handleDeleteCategory(category)}
+                          >
                             <Trash2 className="h-4 w-4 mr-2" />
                             Delete
                           </DropdownMenuItem>
@@ -203,68 +304,125 @@ export default function CategoriesPage() {
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </div>
 
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Tag className="h-5 w-5" />
-                {editingCategory ? 'Edit Category' : 'Add New Category'}
-              </DialogTitle>
-              <DialogDescription>
-                {editingCategory ? 'Update category information.' : 'Create a new service category.'}
-              </DialogDescription>
-            </DialogHeader>
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-4">
+            <div className="text-sm text-gray-600">
+              Showing {((currentPage - 1) * perPage) + 1} to {Math.min(currentPage * perPage, total)} of {total} categories
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <div className="flex items-center px-3 py-1 border rounded-md text-sm">
+                Page {currentPage} of {totalPages}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Tag className="h-5 w-5" />
+              {editingCategory ? 'Edit Category' : 'Add New Category'}
+            </DialogTitle>
+            <DialogDescription>
+              {editingCategory ? 'Update category information.' : 'Create a new service category.'}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit(onSubmit)}>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label>Category Name</Label>
+                <Label htmlFor="name">Category Name *</Label>
                 <Input
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  id="name"
+                  {...register('name')}
+                  placeholder="e.g., Facial Treatment"
                 />
+                {errors.name && (
+                  <p className="text-sm text-red-600">{errors.name.message}</p>
+                )}
               </div>
+
               <div className="grid gap-2">
-                <Label>Description</Label>
+                <Label htmlFor="description">Description</Label>
                 <Textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  id="description"
+                  {...register('description')}
+                  placeholder="Brief description of the category"
                   rows={3}
                 />
+                {errors.description && (
+                  <p className="text-sm text-red-600">{errors.description.message}</p>
+                )}
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label>Color</Label>
-                  <Input
-                    type="color"
-                    value={formData.color}
-                    onChange={(e) => setFormData({...formData, color: e.target.value})}
-                  />
+
+              <div className="grid gap-2">
+                <Label htmlFor="image">Image URL</Label>
+                <Input
+                  id="image"
+                  {...register('image')}
+                  placeholder="https://example.com/image.jpg"
+                />
+                {errors.image && (
+                  <p className="text-sm text-red-600">{errors.image.message}</p>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="space-y-0.5">
+                  <Label htmlFor="is_active">Active Status</Label>
+                  <p className="text-sm text-gray-500">
+                    Make this category visible to customers
+                  </p>
                 </div>
-                <div className="grid gap-2">
-                  <Label>Status</Label>
-                  <select
-                    value={formData.status}
-                    onChange={(e) => setFormData({...formData, status: e.target.value as Category['status']})}
-                    className="px-3 py-2 border rounded-md"
-                  >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                </div>
+                <Switch
+                  id="is_active"
+                  checked={isActive}
+                  onCheckedChange={(checked) => setValue('is_active', checked)}
+                />
               </div>
             </div>
             <DialogFooter>
-              <Button onClick={handleSaveCategory} loading={isSubmitting}>
-                {editingCategory ? 'Update Category' : 'Create Category'}
+              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  editingCategory ? 'Update Category' : 'Create Category'
+                )}
               </Button>
             </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }

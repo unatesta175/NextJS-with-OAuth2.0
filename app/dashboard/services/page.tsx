@@ -1,770 +1,652 @@
 'use client'
 
-import React, { useState } from 'react'
-import Image from 'next/image'
-// DashboardLayout is now handled by layout.tsx
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@components/ui/table'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@components/ui/dropdown-menu'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@components/ui/dialog'
+import React, { useState, useEffect, useCallback } from 'react'
+import { showConfirmationToast, showUpdateConfirmationToast, showSuccessToast, showErrorToast, showValidationErrorToast } from '@lib/toast'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import axios from '@lib/axios'
+
+// Local interfaces
+interface ServiceCategory {
+  id: number;
+  name: string;
+  description: string;
+  image: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Service {
+  id: number;
+  name: string;
+  description: string;
+  extradescription?: string;
+  price: number;
+  duration: number;
+  type: string;
+  image: string;
+  is_active: boolean;
+  category_id: number;
+  category: ServiceCategory;
+  created_at: string;
+  updated_at: string;
+}
+
+interface PaginatedResponse {
+  data: Service[];
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+  from: number;
+  to: number;
+}
+
+// Components
+import ServicesDataTable from '@components/dashboard/ServicesDataTable'
 import { Button } from '@components/ui/button'
 import { Input } from '@components/ui/input'
 import { Label } from '@components/ui/label'
 import { Textarea } from '@components/ui/textarea'
-import { Badge } from '@components/ui/badge'
-import { Avatar, AvatarFallback, AvatarImage } from '@components/ui/avatar'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@components/ui/select'
 import { Switch } from '@components/ui/switch'
-import { Checkbox } from '@components/ui/checkbox'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@components/ui/select'
-import {
-  MoreHorizontal,
-  Search,
-  Download,
-  Plus,
-  Edit,
-  Trash2,
-  Eye,
-  Package
-} from 'lucide-react'
+import { Card, CardHeader, CardTitle, CardContent } from '@components/ui/card'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@components/ui/sheet'
+import { Avatar, AvatarImage, AvatarFallback } from '@components/ui/avatar'
+import { Badge } from '@components/ui/badge'
 
-interface Service {
-  id: string
-  name: string
-  description: string
-  category: string
-  price: number
-  duration: number
-  status: 'active' | 'inactive'
-  image?: string
-  staffAssigned: string[]
-  branchesAvailable: string[]
-  bookingsCount?: number
-  revenue?: number
-}
+// Validation schemas
+const serviceSchema = z.object({
+  name: z.string().min(1, 'Service name is required'),
+  description: z.string().min(1, 'Description is required'),
+  price: z.number().min(0.01, 'Price must be greater than 0'),
+  duration: z.number().min(1, 'Duration must be at least 1 minute'),
+  category_id: z.number().min(1, 'Category is required'),
+  is_active: z.boolean().optional(),
+  image: z.instanceof(FileList).optional(),
+});
 
-interface Staff {
-  id: string
-  name: string
-  avatar?: string
-}
+const updateServiceSchema = serviceSchema.partial().extend({
+  id: z.number(),
+});
 
-interface Branch {
-  id: string
-  name: string
-  address: string
-}
+type ServiceFormData = z.infer<typeof serviceSchema>;
+type UpdateServiceFormData = z.infer<typeof updateServiceSchema>;
 
-interface Category {
-  id: string
-  name: string
-}
+export default function DashboardServicesPage() {
+  // Local state for services and categories
+  const [services, setServices] = useState<Service[]>([]);
+  const [categories, setCategories] = useState<ServiceCategory[]>([]);
+  const [servicesLoading, setServicesLoading] = useState(false);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [pagination, setPagination] = useState<{
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+  }>({
+    current_page: 1,
+    last_page: 1,
+    per_page: 10,
+    total: 0,
+  });
+  
+  // Modal states
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedService, setSelectedService] = useState<Service | null>(null);
 
-// Sample data
-const categoriesData: Category[] = [
-  { id: 'facial', name: 'Facial Treatment' },
-  { id: 'body', name: 'Body Treatment' },
-  { id: 'hair', name: 'Hair Care' },
-  { id: 'nail', name: 'Nail Care' },
-  { id: 'eye', name: 'Eye Treatment' }
-]
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
-const staffData: Staff[] = [
-  { id: 'staff1', name: 'Maya Chen' },
-  { id: 'staff2', name: 'Lisa Wong' },
-  { id: 'staff3', name: 'Amy Tan' },
-  { id: 'staff4', name: 'Sarah Lee' }
-]
-
-const branchesData: Branch[] = [
-  { id: 'main', name: 'Main Branch', address: 'Kuala Lumpur' },
-  { id: 'pj', name: 'Petaling Jaya', address: 'PJ' },
-  { id: 'shah-alam', name: 'Shah Alam', address: 'Shah Alam' }
-]
-
-const servicesData: Service[] = [
-  {
-    id: 'S001',
-    name: 'Deep Cleansing Facial',
-    description: 'A thorough facial treatment that cleanses and purifies the skin',
-    category: 'facial',
-    price: 150.00,
-    duration: 90,
-    status: 'active',
-    staffAssigned: ['staff1', 'staff2'],
-    branchesAvailable: ['main', 'pj'],
-    bookingsCount: 45,
-    revenue: 6750.00
-  },
-  {
-    id: 'S002',
-    name: 'Relaxing Body Massage',
-    description: 'Full body massage for ultimate relaxation and stress relief',
-    category: 'body',
-    price: 200.00,
-    duration: 120,
-    status: 'active',
-    staffAssigned: ['staff2', 'staff3'],
-    branchesAvailable: ['main', 'pj', 'shah-alam'],
-    bookingsCount: 38,
-    revenue: 7600.00
-  },
-  {
-    id: 'S003',
-    name: 'Hair Treatment & Styling',
-    description: 'Professional hair treatment and styling service',
-    category: 'hair',
-    price: 80.00,
-    duration: 60,
-    status: 'active',
-    staffAssigned: ['staff3', 'staff4'],
-    branchesAvailable: ['main'],
-    bookingsCount: 32,
-    revenue: 2560.00
-  },
-  {
-    id: 'S004',
-    name: 'Luxury Manicure & Pedicure',
-    description: 'Complete nail care with luxury treatment',
-    category: 'nail',
-    price: 120.00,
-    duration: 75,
-    status: 'active',
-    staffAssigned: ['staff1', 'staff4'],
-    branchesAvailable: ['pj', 'shah-alam'],
-    bookingsCount: 28,
-    revenue: 3360.00
-  },
-  {
-    id: 'S005',
-    name: 'Anti-Aging Eye Treatment',
-    description: 'Specialized treatment for eye area rejuvenation',
-    category: 'eye',
-    price: 100.00,
-    duration: 45,
-    status: 'inactive',
-    staffAssigned: ['staff1'],
-    branchesAvailable: ['main'],
-    bookingsCount: 15,
-    revenue: 1500.00
-  }
-]
-
-const statusConfig = {
-  active: { label: 'Active', color: 'bg-green-100 text-green-800' },
-  inactive: { label: 'Inactive', color: 'bg-gray-100 text-gray-800' }
-}
-
-export default function ServicesPage() {
-  const [searchTerm, setSearchTerm] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState<string>('all')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [staffFilter, setStaffFilter] = useState<string>('all')
-  const [branchFilter, setBranchFilter] = useState<string>('all')
-  const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [editingService, setEditingService] = useState<Service | null>(null)
-  const [selectedServices, setSelectedServices] = useState<string[]>([])
-  const [isSaving, setIsSaving] = useState(false)
-  const [formData, setFormData] = useState({
+  // Form instances
+  const createForm = useForm<ServiceFormData>({
+    resolver: zodResolver(serviceSchema),
+    defaultValues: {
     name: '',
     description: '',
-    category: '',
     price: 0,
-    duration: 0,
-    status: 'active' as Service['status'],
-    staffAssigned: [] as string[],
-    branchesAvailable: [] as string[]
-  })
+      duration: 60,
+      category_id: undefined, // Don't set a default, force user to select
+      is_active: true,
+    },
+  });
 
-
-  // Filter and search services
-  const filteredServices = servicesData.filter(service => {
-    const matchesSearch = service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         service.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         service.id.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    const matchesCategory = categoryFilter === 'all' || service.category === categoryFilter
-    const matchesStatus = statusFilter === 'all' || service.status === statusFilter
-    const matchesStaff = staffFilter === 'all' || service.staffAssigned.includes(staffFilter)
-    const matchesBranch = branchFilter === 'all' || service.branchesAvailable.includes(branchFilter)
-    
-    return matchesSearch && matchesCategory && matchesStatus && matchesStaff && matchesBranch
-  })
-
-  // Pagination
-  const totalPages = Math.ceil(filteredServices.length / pageSize)
-  const paginatedServices = filteredServices.slice((currentPage - 1) * pageSize, currentPage * pageSize)
-
-  const handleAddService = () => {
-    setEditingService(null)
-    setFormData({
+  const editForm = useForm<UpdateServiceFormData>({
+    resolver: zodResolver(updateServiceSchema),
+    defaultValues: {
       name: '',
       description: '',
-      category: '',
       price: 0,
-      duration: 0,
-      status: 'active',
-      staffAssigned: [],
-      branchesAvailable: []
-    })
-    setIsDialogOpen(true)
-  }
+      duration: 60,
+      category_id: undefined,
+      is_active: true,
+    },
+  });
 
+  // Fetch data functions using axios directly
+  const fetchServicesData = useCallback(async () => {
+    setServicesLoading(true);
+    try {
+      const response = await axios.get<PaginatedResponse>('/admin/services', {
+        params: {
+          page: currentPage,
+          per_page: pageSize,
+        },
+      });
+      
+      setServices(response.data.data);
+      setPagination({
+        current_page: response.data.current_page,
+        last_page: response.data.last_page,
+        per_page: response.data.per_page,
+        total: response.data.total,
+      });
+    } catch (error: any) {
+      console.error('Fetch services error:', error);
+      showErrorToast('Failed to load services');
+    } finally {
+      setServicesLoading(false);
+    }
+  }, [currentPage, pageSize]);
+
+  const fetchCategoriesData = useCallback(async () => {
+    setCategoriesLoading(true);
+    try {
+      console.log('🔄 Fetching categories...');
+      const response = await axios.get('/service-categories', {
+        params: {
+          page: 1,
+          per_page: 100,
+        },
+      });
+      console.log('✅ Categories fetched successfully:', response.data);
+      setCategories(response.data.data || []);
+    } catch (error) {
+      console.error('❌ Error fetching categories:', error);
+      showErrorToast('Failed to load categories');
+    } finally {
+      setCategoriesLoading(false);
+    }
+  }, []);
+
+  // Initial data fetch
+  useEffect(() => {
+    fetchServicesData();
+    fetchCategoriesData();
+  }, [fetchServicesData, fetchCategoriesData]);
+
+  // Debug categories
+  useEffect(() => {
+    console.log('📋 Categories state:', categories);
+    console.log('📋 Categories loading:', categoriesLoading);
+  }, [categories, categoriesLoading]);
+
+  // Handle create service using axios directly
+  const handleCreateService = async (data: ServiceFormData) => {
+    setServicesLoading(true);
+    try {
+      console.log('🚀 Creating service with data:', data);
+      
+      // Prepare FormData for file upload
+      const formData = new FormData();
+      formData.append('name', data.name);
+      formData.append('description', data.description);
+      formData.append('price', data.price.toString());
+      formData.append('duration', data.duration.toString());
+      formData.append('category_id', data.category_id.toString());
+      formData.append('is_active', (data.is_active ?? true) ? '1' : '0');
+      
+      // Handle file input properly
+      if (data.image && data.image.length > 0) {
+        formData.append('image', data.image[0]);
+      }
+      
+      console.log('🚀 Prepared service FormData');
+      
+      await axios.post('/services', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+      setShowCreateModal(false);
+      createForm.reset();
+      await fetchServicesData(); // Refresh the data
+      showSuccessToast('Service created successfully!');
+    } catch (error: any) {
+      console.error('Create service error:', error);
+      
+      // Enhanced error logging
+      if (error.response) {
+        console.error('Error response:', error.response);
+        console.error('Error status:', error.response.status);
+        console.error('Error data:', error.response.data);
+      }
+      
+      // Handle validation errors
+      if (error.response?.status === 422 && error.response?.data?.errors) {
+        showValidationErrorToast(error.response.data.errors);
+      } else if (error.response?.data?.message) {
+        showErrorToast(error.response.data.message);
+      } else if (error.message) {
+        showErrorToast(error.message);
+      } else {
+        showErrorToast('Failed to create service. Please try again.');
+      }
+    } finally {
+      setServicesLoading(false);
+    }
+  };
+
+  // Handle update service using axios directly
+  const handleUpdateService = async (data: UpdateServiceFormData) => {
+    if (!selectedService) return;
+    
+    showUpdateConfirmationToast(
+      `Are you sure you want to update ${selectedService.name}?`,
+      async () => {
+        setServicesLoading(true);
+        try {
+          // Prepare FormData for file upload
+          const formData = new FormData();
+          
+          if (data.name) formData.append('name', data.name);
+          if (data.description) formData.append('description', data.description);
+          if (data.price !== undefined) formData.append('price', data.price.toString());
+          if (data.duration !== undefined) formData.append('duration', data.duration.toString());
+          if (data.category_id !== undefined) formData.append('category_id', data.category_id.toString());
+          if (data.is_active !== undefined) formData.append('is_active', data.is_active ? '1' : '0');
+          
+          // Handle file input properly
+          if (data.image && data.image.length > 0) {
+            formData.append('image', data.image[0]);
+          }
+          
+          // Add _method for Laravel method spoofing
+          formData.append('_method', 'PUT');
+
+          await axios.post(`/services/${selectedService.id}`, formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+          });
+          
+          setShowEditModal(false);
+          setSelectedService(null);
+          editForm.reset();
+          await fetchServicesData();
+          showSuccessToast('Service updated successfully!');
+        } catch (error: any) {
+          console.error('Update service error:', error);
+          
+          if (error.response?.status === 422 && error.response?.data?.errors) {
+            showValidationErrorToast(error.response.data.errors);
+          } else if (error.response?.data?.message) {
+            showErrorToast(error.response.data.message);
+          } else {
+            showErrorToast('Failed to update service. Please try again.');
+          }
+        } finally {
+          setServicesLoading(false);
+        }
+      }
+    );
+  };
+
+  // Handle delete service using axios directly
+  const handleDeleteService = (service: Service) => {
+    showConfirmationToast(
+      `Are you sure you want to delete ${service.name}? This action cannot be undone.`,
+      async () => {
+        setServicesLoading(true);
+        try {
+          await axios.delete(`/services/${service.id}`);
+          await fetchServicesData();
+          showSuccessToast('Service deleted successfully!');
+        } catch (error: any) {
+          console.error('Delete service error:', error);
+          showErrorToast('Failed to delete service. Please try again.');
+        } finally {
+          setServicesLoading(false);
+        }
+      }
+    );
+  };
+
+  // Handle edit service
   const handleEditService = (service: Service) => {
-    setEditingService(service)
-    setFormData({
+    setSelectedService(service);
+    editForm.reset({
+      id: service.id,
       name: service.name,
       description: service.description,
-      category: service.category,
       price: service.price,
       duration: service.duration,
-      status: service.status,
-      staffAssigned: service.staffAssigned,
-      branchesAvailable: service.branchesAvailable
-    })
-    setIsDialogOpen(true)
-  }
+      category_id: service.category.id,
+      is_active: service.is_active,
+    });
+    setShowEditModal(true);
+  };
 
-  const handleSaveService = async () => {
-    setIsSaving(true)
-    try {
-      // TODO: Implement save service logic
-      console.log('Save service:', formData)
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      setIsDialogOpen(false)
-    } catch (error) {
-      console.error('Failed to save service:', error)
-    } finally {
-      setIsSaving(false)
-    }
-  }
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
 
-  const handleDeleteService = (service: Service) => {
-    // TODO: Implement delete service logic with confirmation
-    console.log('Delete service:', service.id)
-  }
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size);
+    setCurrentPage(1); // Reset to first page when changing page size
+  };
 
-  const handleStatusToggle = (service: Service) => {
-    // TODO: Implement status toggle
-    console.log('Toggle status for service:', service.id)
-  }
-
-  const handleBulkAction = (action: 'activate' | 'deactivate' | 'delete') => {
-    // TODO: Implement bulk actions
-    console.log('Bulk action:', action, selectedServices)
-  }
-
-  const handleExport = () => {
-    // TODO: Implement export functionality
-    console.log('Export services data')
-  }
-
-  const getCategoryName = (categoryId: string) => {
-    return categoriesData.find(cat => cat.id === categoryId)?.name || categoryId
-  }
-
-  // const getStaffNames = (staffIds: string[]) => {
-  //   return staffIds.map(id => staffData.find(staff => staff.id === id)?.name || id)
-  // }
-
-  // const getBranchNames = (branchIds: string[]) => {
-  //   return branchIds.map(id => branchesData.find(branch => branch.id === id)?.name || id)
-  // }
+  // Handle add service
+  const handleAddService = () => {
+    createForm.reset({
+      name: '',
+      description: '',
+      price: 0,
+      duration: 60,
+      category_id: undefined,
+      is_active: true,
+    });
+    setShowCreateModal(true);
+  };
 
   return (
-      <div className="space-y-6">
-        {/* Page Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Services Management</h1>
-            <p className="text-gray-600 mt-1">Manage spa services, pricing, and availability</p>
-          </div>
-          <Button onClick={handleAddService} className="bg-[#ff0a85] hover:bg-[#ff0a85]/90">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Service
-          </Button>
-        </div>
+    <div className="container mx-auto py-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Services Management</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ServicesDataTable
+            data={services || []}
+            loading={servicesLoading}
+            onRefresh={fetchServicesData}
+            onEdit={handleEditService}
+            onDelete={handleDeleteService}
+            onAdd={handleAddService}
+            currentPage={currentPage}
+            totalCount={pagination.total}
+            pageSize={pageSize}
+            onPageChange={handlePageChange}
+            onPageSizeChange={handlePageSizeChange}
+          />
+        </CardContent>
+      </Card>
 
-        {/* Filters and Search */}
-        <div className="bg-white rounded-lg border p-6">
-          <div className="flex flex-col lg:flex-row gap-4 items-center justify-between mb-6">
-            <div className="flex flex-col sm:flex-row gap-4 flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+      {/* Create Service Sheet */}
+      <Sheet open={showCreateModal} onOpenChange={setShowCreateModal}>
+        <SheetContent className="sm:max-w-[600px] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Add New Service</SheetTitle>
+            <SheetDescription>
+              Create a new spa service with pricing and details.
+            </SheetDescription>
+          </SheetHeader>
+          <form onSubmit={createForm.handleSubmit(handleCreateService)} className="space-y-4 mt-4">
+            <div className="grid grid-cols-1 gap-4">
+              <div>
+                <Label htmlFor="create-name">Service Name</Label>
                 <Input
-                  placeholder="Search services..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-64"
+                  id="create-name"
+                  {...createForm.register('name')}
+                  placeholder="Enter service name"
                 />
+                {createForm.formState.errors.name && (
+                  <p className="text-red-500 text-sm mt-1">{createForm.formState.errors.name.message}</p>
+                )}
               </div>
               
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {categoriesData.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  {Object.entries(statusConfig).map(([value, config]) => (
-                    <SelectItem key={value} value={value}>
-                      {config.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={staffFilter} onValueChange={setStaffFilter}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Staff" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Staff</SelectItem>
-                  {staffData.map((staff) => (
-                    <SelectItem key={staff.id} value={staff.id}>
-                      {staff.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={branchFilter} onValueChange={setBranchFilter}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Branch" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Branches</SelectItem>
-                  {branchesData.map((branch) => (
-                    <SelectItem key={branch.id} value={branch.id}>
-                      {branch.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {selectedServices.length > 0 && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline">
-                      Bulk Actions ({selectedServices.length})
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    <DropdownMenuItem onClick={() => handleBulkAction('activate')}>
-                      Activate Selected
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleBulkAction('deactivate')}>
-                      Deactivate Selected
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem 
-                      onClick={() => handleBulkAction('delete')}
-                      className="text-red-600"
-                    >
-                      Delete Selected
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-              <Button variant="outline" onClick={handleExport}>
-                <Download className="h-4 w-4 mr-2" />
-                Export
-              </Button>
-            </div>
-          </div>
-
-          {/* Table */}
-          <div className="border rounded-lg">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">
-                    <Checkbox
-                      checked={selectedServices.length === paginatedServices.length}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSelectedServices(paginatedServices.map(s => s.id))
-                        } else {
-                          setSelectedServices([])
-                        }
-                      }}
-                    />
-                  </TableHead>
-                  <TableHead>Service</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Staff</TableHead>
-                  <TableHead>Branches</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Performance</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginatedServices.map((service) => (
-                  <TableRow key={service.id}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedServices.includes(service.id)}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setSelectedServices([...selectedServices, service.id])
-                          } else {
-                            setSelectedServices(selectedServices.filter(id => id !== service.id))
-                          }
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                          {service.image ? (
-                            <Image src={service.image} alt={service.name} className="w-full h-full object-cover rounded-lg" width={48} height={48} />
-                          ) : (
-                            <Package className="h-6 w-6 text-gray-400" />
-                          )}
-                        </div>
-                        <div>
-                          <div className="font-medium">{service.name}</div>
-                          <div className="text-sm text-gray-500 line-clamp-1">{service.description}</div>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">
-                        {getCategoryName(service.category)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-medium">RM {service.price.toFixed(2)}</TableCell>
-                    <TableCell>{service.duration} min</TableCell>
-                    <TableCell>
-                      <div className="flex -space-x-2">
-                        {service.staffAssigned.slice(0, 3).map((staffId) => {
-                          const staff = staffData.find(s => s.id === staffId)
-                          return (
-                            <Avatar key={staffId} className="h-6 w-6 border-2 border-white">
-                              <AvatarImage src={staff?.avatar} />
-                              <AvatarFallback className="text-xs">
-                                {staff?.name.split(' ').map(n => n[0]).join('')}
-                              </AvatarFallback>
-                            </Avatar>
-                          )
-                        })}
-                        {service.staffAssigned.length > 3 && (
-                          <div className="h-6 w-6 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center">
-                            <span className="text-xs text-gray-600">+{service.staffAssigned.length - 3}</span>
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {service.branchesAvailable.slice(0, 2).map((branchId) => {
-                          const branch = branchesData.find(b => b.id === branchId)
-                          return (
-                            <Badge key={branchId} variant="outline" className="text-xs">
-                              {branch?.name}
-                            </Badge>
-                          )
-                        })}
-                        {service.branchesAvailable.length > 2 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{service.branchesAvailable.length - 2}
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Badge className={statusConfig[service.status].color}>
-                          {statusConfig[service.status].label}
-                        </Badge>
-                        <Switch
-                          checked={service.status === 'active'}
-                          onCheckedChange={() => handleStatusToggle(service)}
-                        />
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        <div>{service.bookingsCount} bookings</div>
-                        <div className="text-gray-500">RM {service.revenue?.toFixed(2)}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => console.log('View service:', service.id)}>
-                            <Eye className="h-4 w-4 mr-2" />
-                            View Details
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleEditService(service)}>
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem 
-                            onClick={() => handleDeleteService(service)}
-                            className="text-red-600"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-
-          {/* Pagination */}
-          <div className="flex items-center justify-between mt-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500">Show</span>
-              <Select value={pageSize.toString()} onValueChange={(value) => setPageSize(Number(value))}>
-                <SelectTrigger className="w-20">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="25">25</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                </SelectContent>
-              </Select>
-              <span className="text-sm text-gray-500">
-                of {filteredServices.length} results
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-              >
-                Previous
-              </Button>
-              <span className="text-sm text-gray-500">
-                Page {currentPage} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* Add/Edit Service Dialog */}
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5" />
-                {editingService ? 'Edit Service' : 'Add New Service'}
-              </DialogTitle>
-              <DialogDescription>
-                {editingService ? 'Update service information and settings.' : 'Create a new spa service.'}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="name">Service Name</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="description">Description</Label>
+              <div>
+                <Label htmlFor="create-description">Description</Label>
                 <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  id="create-description"
+                  {...createForm.register('description')}
+                  placeholder="Enter service description"
                   rows={3}
                 />
+                {createForm.formState.errors.description && (
+                  <p className="text-red-500 text-sm mt-1">{createForm.formState.errors.description.message}</p>
+                )}
               </div>
+
               <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="category">Category</Label>
-                  <Select value={formData.category} onValueChange={(value) => setFormData({...formData, category: value})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categoriesData.map((category) => (
-                        <SelectItem key={category.id} value={category.id}>
+                <div>
+                  <Label htmlFor="create-price">Price (RM)</Label>
+                  <Input
+                    id="create-price"
+                    type="number"
+                    step="0.01"
+                    {...createForm.register('price', { valueAsNumber: true })}
+                    placeholder="0.00"
+                  />
+                  {createForm.formState.errors.price && (
+                    <p className="text-red-500 text-sm mt-1">{createForm.formState.errors.price.message}</p>
+                  )}
+            </div>
+
+                <div>
+                  <Label htmlFor="create-duration">Duration (minutes)</Label>
+                  <Input
+                    id="create-duration"
+                    type="number"
+                    {...createForm.register('duration', { valueAsNumber: true })}
+                    placeholder="60"
+                  />
+                  {createForm.formState.errors.duration && (
+                    <p className="text-red-500 text-sm mt-1">{createForm.formState.errors.duration.message}</p>
+                  )}
+            </div>
+          </div>
+
+              <div>
+                <Label htmlFor="create-category">Category</Label>
+                <Select 
+                  onValueChange={(value) => {
+                    if (value !== "no-categories") {
+                      const categoryId = parseInt(value);
+                      console.log('🏷️ Setting category_id:', categoryId);
+                      createForm.setValue('category_id', categoryId);
+                    }
+                  }}
+                  value={createForm.watch('category_id')?.toString()}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories && categories.length > 0 ? (
+                      categories.map((category) => (
+                        <SelectItem key={category.id} value={category.id.toString()}>
                           {category.name}
                         </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="status">Status</Label>
-                  <Select value={formData.status} onValueChange={(value: Service['status']) => setFormData({...formData, status: value})}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="inactive">Inactive</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="price">Price (RM)</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={formData.price}
-                    onChange={(e) => setFormData({...formData, price: parseFloat(e.target.value) || 0})}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="duration">Duration (minutes)</Label>
-                  <Input
-                    id="duration"
-                    type="number"
-                    min="0"
-                    value={formData.duration}
-                    onChange={(e) => setFormData({...formData, duration: parseInt(e.target.value) || 0})}
-                  />
-                </div>
-              </div>
-              <div className="grid gap-2">
-                <Label>Staff Assignment</Label>
-                <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
-                  {staffData.map((staff) => (
-                    <div key={staff.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`staff-${staff.id}`}
-                        checked={formData.staffAssigned.includes(staff.id)}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setFormData({
-                              ...formData,
-                              staffAssigned: [...formData.staffAssigned, staff.id]
-                            })
-                          } else {
-                            setFormData({
-                              ...formData,
-                              staffAssigned: formData.staffAssigned.filter(id => id !== staff.id)
-                            })
-                          }
-                        }}
-                      />
-                      <Label htmlFor={`staff-${staff.id}`} className="text-sm">
-                        {staff.name}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="grid gap-2">
-                <Label>Branch Availability</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {branchesData.map((branch) => (
-                    <div key={branch.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`branch-${branch.id}`}
-                        checked={formData.branchesAvailable.includes(branch.id)}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setFormData({
-                              ...formData,
-                              branchesAvailable: [...formData.branchesAvailable, branch.id]
-                            })
-                          } else {
-                            setFormData({
-                              ...formData,
-                              branchesAvailable: formData.branchesAvailable.filter(id => id !== branch.id)
-                            })
-                          }
-                        }}
-                      />
-                      <Label htmlFor={`branch-${branch.id}`} className="text-sm">
-                        {branch.name}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
+                      ))
+                    ) : (
+                      <SelectItem value="no-categories" disabled>
+                        No categories available
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                {createForm.formState.errors.category_id && (
+                  <p className="text-red-500 text-sm mt-1">{createForm.formState.errors.category_id.message}</p>
+                          )}
+                        </div>
+
+                        <div>
+                <Label htmlFor="create-image">Service Image</Label>
+                <Input
+                  id="create-image"
+                  type="file"
+                  accept="image/*"
+                  {...createForm.register('image')}
+                />
+          </div>
+
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="create-active"
+                  checked={createForm.watch('is_active')}
+                  onCheckedChange={(checked) => createForm.setValue('is_active', checked)}
+                />
+                <Label htmlFor="create-active">Active</Label>
               </div>
             </div>
-            <DialogFooter>
-              <Button 
-                type="submit" 
-                onClick={handleSaveService}
-                loading={isSaving}
+
+            <div className="flex justify-end space-x-2 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowCreateModal(false)}
               >
-                {editingService ? 'Update Service' : 'Create Service'}
+                Cancel
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <Button type="submit" disabled={servicesLoading}>
+                {servicesLoading ? 'Creating...' : 'Create Service'}
+              </Button>
+            </div>
+          </form>
+        </SheetContent>
+      </Sheet>
+
+      {/* Edit Service Sheet */}
+      <Sheet open={showEditModal} onOpenChange={setShowEditModal}>
+        <SheetContent className="sm:max-w-[600px] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Edit Service</SheetTitle>
+            <SheetDescription>
+              Update service information and settings.
+            </SheetDescription>
+          </SheetHeader>
+          <form onSubmit={editForm.handleSubmit(handleUpdateService)} className="space-y-4 mt-4">
+            <div className="grid grid-cols-1 gap-4">
+              <div>
+                <Label htmlFor="edit-name">Service Name</Label>
+                <Input
+                  id="edit-name"
+                  {...editForm.register('name')}
+                  placeholder="Enter service name"
+                />
+                {editForm.formState.errors.name && (
+                  <p className="text-red-500 text-sm mt-1">{editForm.formState.errors.name.message}</p>
+                )}
+              </div>
+              
+              <div>
+                <Label htmlFor="edit-description">Description</Label>
+                <Textarea
+                  id="edit-description"
+                  {...editForm.register('description')}
+                  placeholder="Enter service description"
+                  rows={3}
+                />
+                {editForm.formState.errors.description && (
+                  <p className="text-red-500 text-sm mt-1">{editForm.formState.errors.description.message}</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="edit-price">Price (RM)</Label>
+                  <Input
+                    id="edit-price"
+                    type="number"
+                    step="0.01"
+                    {...editForm.register('price', { valueAsNumber: true })}
+                    placeholder="0.00"
+                  />
+                  {editForm.formState.errors.price && (
+                    <p className="text-red-500 text-sm mt-1">{editForm.formState.errors.price.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-duration">Duration (minutes)</Label>
+                  <Input
+                    id="edit-duration"
+                    type="number"
+                    {...editForm.register('duration', { valueAsNumber: true })}
+                    placeholder="60"
+                  />
+                  {editForm.formState.errors.duration && (
+                    <p className="text-red-500 text-sm mt-1">{editForm.formState.errors.duration.message}</p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="edit-category">Category</Label>
+                <Select 
+                  onValueChange={(value) => {
+                    if (value !== "no-categories") {
+                      const categoryId = parseInt(value);
+                      editForm.setValue('category_id', categoryId);
+                    }
+                  }}
+                  value={editForm.watch('category_id')?.toString()}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories && categories.length > 0 ? (
+                      categories.map((category) => (
+                        <SelectItem key={category.id} value={category.id.toString()}>
+                          {category.name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="no-categories" disabled>
+                        No categories available
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                {editForm.formState.errors.category_id && (
+                  <p className="text-red-500 text-sm mt-1">{editForm.formState.errors.category_id.message}</p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="edit-image">Service Image</Label>
+                <Input
+                  id="edit-image"
+                  type="file"
+                  accept="image/*"
+                  {...editForm.register('image')}
+                />
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="edit-active"
+                  checked={editForm.watch('is_active')}
+                  onCheckedChange={(checked) => editForm.setValue('is_active', checked)}
+                />
+                <Label htmlFor="edit-active">Active</Label>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-4">
+              <Button 
+                type="button"
+                variant="outline"
+                onClick={() => setShowEditModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={servicesLoading}>
+                {servicesLoading ? 'Updating...' : 'Update Service'}
+              </Button>
+            </div>
+          </form>
+        </SheetContent>
+      </Sheet>
+
       </div>
   )
 }

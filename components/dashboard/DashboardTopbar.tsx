@@ -6,7 +6,8 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useAppDispatch } from '@lib/reduxHooks'
 import { logoutUser } from '@/features/auth/authSlice'
-import { Bell, ChevronDown, Menu, MapPin, Settings, LogOut, User } from 'lucide-react'
+import { getUserImageUrl } from '@lib/image-utils'
+import { Bell, ChevronDown, Menu, Settings, LogOut, User } from 'lucide-react'
 import { Button } from '@components/ui/button'
 import {
   DropdownMenu,
@@ -16,13 +17,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@components/ui/dropdown-menu'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@components/ui/select'
 import { Avatar, AvatarFallback, AvatarImage } from '@components/ui/avatar'
 import { Badge } from '@components/ui/badge'
 
@@ -34,13 +28,6 @@ interface DashboardTopbarProps {
     avatar?: string
     role: string
   }
-  selectedBranch?: string
-  onBranchChange?: (branchId: string) => void
-  branches?: Array<{
-    id: string
-    name: string
-    address: string
-  }>
   notificationCount?: number
 }
 
@@ -51,13 +38,6 @@ export function DashboardTopbar({
     email: 'john@kapasbeauty.com',
     role: 'admin'
   },
-  selectedBranch = 'main',
-  onBranchChange,
-  branches = [
-    { id: 'main', name: 'Main Branch', address: 'Kuala Lumpur' },
-    { id: 'pj', name: 'Petaling Jaya', address: 'PJ' },
-    { id: 'shah-alam', name: 'Shah Alam', address: 'Shah Alam' }
-  ],
   notificationCount = 3
 }: DashboardTopbarProps) {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false)
@@ -96,39 +76,6 @@ export function DashboardTopbar({
           >
             <Menu className="h-5 w-5" />
           </Button>
-
-          {/* Logo - Hidden on mobile, visible on larger screens */}
-          <Link href="/" className="hidden md:flex items-center">
-            <div className="relative h-8 w-24">
-              <Image
-                src="/Logo/big-logo.png"
-                alt="Kapas Beauty Spa"
-                fill
-                className="object-contain"
-                priority
-              />
-            </div>
-          </Link>
-
-          {/* Branch Selector */}
-          <div className="flex items-center space-x-2">
-            <MapPin className="h-4 w-4 text-gray-400" />
-            <Select value={selectedBranch} onValueChange={onBranchChange}>
-              <SelectTrigger className="w-48 border-0 shadow-none focus:ring-0">
-                <SelectValue placeholder="Select branch" />
-              </SelectTrigger>
-              <SelectContent>
-                {branches.map((branch) => (
-                  <SelectItem key={branch.id} value={branch.id}>
-                    <div className="flex flex-col items-start">
-                      <span className="font-medium">{branch.name}</span>
-                      <span className="text-xs text-gray-500">{branch.address}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
         </div>
 
         {/* Right Section */}
@@ -182,7 +129,7 @@ export function DashboardTopbar({
               <Button variant="ghost" className="flex items-center space-x-2 px-3">
                 <Avatar className="h-8 w-8">
                   <AvatarImage 
-                    src={user.avatar || "/placeholder-avatar.svg"} 
+                    src={getUserImageUrl(user.avatar)} 
                     alt={user.name}
                     onError={(e) => {
                       (e.target as HTMLImageElement).src = "/placeholder-avatar.svg";

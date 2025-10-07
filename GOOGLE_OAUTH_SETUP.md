@@ -80,3 +80,11 @@ php artisan make:migration add_google_and_password_reset_fields_to_users_table
 2. Set up production Google OAuth credentials
 3. Add email verification for new accounts
 4. Implement 2FA (optional)
+
+
+
+
+
+
+
+

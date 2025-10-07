@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { useAppSelector, useAppDispatch } from '@lib/reduxHooks'
 import { updateProfile } from '@/features/auth/authSlice'
+import { getUserImageUrl } from '@lib/image-utils'
 
 const profileSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -131,7 +132,7 @@ export default function ProfilePage() {
                   <div className="relative">
                     <Avatar className="h-24 w-24">
                       <AvatarImage 
-                        src={imagePreview || (user as any)?.image || "/placeholder-avatar.svg"} 
+                        src={imagePreview || getUserImageUrl((user as any)?.image)} 
                         alt={user?.name}
                         onError={(e) => {
                           console.log('Dashboard avatar image failed to load:', (user as any)?.image);

@@ -13,6 +13,7 @@ import { Badge } from "@components/ui/badge";
 import { Skeleton } from "@components/ui/skeleton";
 import { User, Mail, Phone, Camera, Save, Edit, Lock } from "lucide-react";
 import { useAppSelector, useAppDispatch } from "@lib/reduxHooks";
+import { getUserImageUrl } from "@lib/image-utils";
 import { updateProfile } from "@/features/auth/authSlice";
 import { PasswordChangeModal } from "@components/ui/password-change-modal";
 
@@ -203,7 +204,7 @@ export default function ProfilePage() {
                 <div className="relative">
                   <Avatar className="w-20 h-20">
                     <AvatarImage 
-                      src={imagePreview || (user as any)?.image || "/placeholder-avatar.svg"} 
+                      src={imagePreview || getUserImageUrl((user as any)?.image)} 
                       alt={user?.name}
                       onError={(e) => {
                         console.log('Avatar image failed to load:', (user as any)?.image);

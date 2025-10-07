@@ -76,8 +76,8 @@ export const logoutUser = createAsyncThunk(
   'auth/logout',
   async () => {
     try {
-      await api.post('/auth/logout');
-      return null;
+      const response = await api.post('/auth/logout');
+      return response.data;
     } catch {
       // Even if logout fails on server, clear auth state
       return null;
@@ -107,7 +107,6 @@ export const updateProfile = createAsyncThunk(
       
       // Create FormData
       const formData = new FormData();
-      formData.append('_method', 'PUT');
       
       if (profileData.name) formData.append('name', profileData.name);
       if (profileData.phone) formData.append('phone', profileData.phone);
@@ -234,14 +233,29 @@ const authSlice = createSlice({
         state.isAuthenticated = true;
         state.error = null;
         // Show success toast
-        showSuccessToast(action.payload.message || 'You have successfully logged in!');
+        showSuccessToast(action.payload.message );
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
         state.isAuthenticated = false;
-        // Show error toast
-        showErrorToast('Invalid email or password (No account)');
+        // Show error toast with backend message
+        const errorPayload = action.payload;
+        let errorMessage = 'Login failed';
+        
+        // Handle Laravel validation errors structure
+        if (typeof errorPayload === 'object' && errorPayload !== null) {
+          // Check if it's Laravel validation errors (e.g., { email: ['error message'] })
+          if ('email' in errorPayload && Array.isArray(errorPayload.email)) {
+            errorMessage = errorPayload.email[0];
+          } else if ('password' in errorPayload && Array.isArray(errorPayload.password)) {
+            errorMessage = errorPayload.password[0];
+          }
+        } else if (typeof errorPayload === 'string') {
+          errorMessage = errorPayload;
+        }
+        
+        showErrorToast(errorMessage);
       })
       // Register cases
       .addCase(registerUser.pending, (state) => {
@@ -255,24 +269,33 @@ const authSlice = createSlice({
         state.error = null;
         // Show success toast
         showSuccessToast(action.payload.message || 'Account created successfully! Welcome aboard!');
-      })
-      .addCase(registerUser.rejected, (state, action) => {
+      }) 
+           .addCase(registerUser.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
         state.isAuthenticated = false;
-        // Show error toast based on error type
-        const errorPayload = action.payload as any;
+        // Show error toast with backend validation message
+        const errorPayload = action.payload;
+        let errorMessage = 'Registration failed. Please try again.';
+        
+        // Handle Laravel validation errors structure
         if (typeof errorPayload === 'object' && errorPayload !== null) {
-          if ('password' in errorPayload || (typeof errorPayload === 'string' && errorPayload.includes('password'))) {
-            showErrorToast('Passwords do not match');
-          } else if ('email' in errorPayload || (typeof errorPayload === 'string' && errorPayload.includes('email'))) {
-            showErrorToast('Customer have been registered');
-          } else {
-            showErrorToast('Registration failed. Please try again.');
-          }
-        } else {
-          showErrorToast('Registration failed. Please try again.');
+          // Laravel returns errors as: { email: ['message'], password: ['message'] }
+          // Extract the first error message from any field
+          if ('email' in errorPayload && Array.isArray(errorPayload.email)) {
+            errorMessage = errorPayload.email[0]; // e.g., "The email has already been taken."
+          } else if ('password' in errorPayload && Array.isArray(errorPayload.password)) {
+            errorMessage = errorPayload.password[0]; // e.g., "The password confirmation does not match."
+          } else if ('name' in errorPayload && Array.isArray(errorPayload.name)) {
+            errorMessage = errorPayload.name[0]; // e.g., "The name field is required."
+          } else if ('phone' in errorPayload && Array.isArray(errorPayload.phone)) {
+            errorMessage = errorPayload.phone[0];
+          } 
+        } else if (typeof errorPayload === 'string') {
+          errorMessage = errorPayload;
         }
+        
+        showErrorToast(errorMessage);
       })
       // Logout cases
       .addCase(logoutUser.fulfilled, (state, action) => {
@@ -281,7 +304,7 @@ const authSlice = createSlice({
         state.error = null;
         state.loading = false;
         // Show success toast
-        showSuccessToast('You have been logged out successfully!');
+        showSuccessToast(action.payload.message);
       })
       // Check auth status
       .addCase(checkAuthStatus.pending, (state) => {

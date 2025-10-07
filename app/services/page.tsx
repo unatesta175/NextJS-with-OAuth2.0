@@ -386,7 +386,7 @@ export default function ServicesPage() {
                     asChild
                     className="w-full bg-primary hover:bg-primary/90 text-white"
                   >
-                    <Link href={`/booking?service=${service.id}`}>
+                    <Link href={`/booking?service=${service.id}&category=${service.category?.id || ''}`}>
                       Tempah Sekarang
                     </Link>
                   </Button>

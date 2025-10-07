@@ -33,6 +33,39 @@ export const showErrorToast = (message: string) => {
   });
 };
 
+export const showValidationErrorToast = (errors: Record<string, string[]> | string) => {
+  if (typeof errors === 'string') {
+    showErrorToast(errors);
+    return;
+  }
+
+  // Handle Laravel validation errors format
+  const errorMessages = Object.entries(errors)
+    .map(([field, messages]) => `${field}: ${messages.join(', ')}`)
+    .join('\n');
+
+  toast.error(
+    <div className="space-y-1">
+      <div className="font-semibold">Validation Errors:</div>
+      <div className="text-sm whitespace-pre-line">{errorMessages}</div>
+    </div>,
+    {
+      duration: 6000,
+      position: 'top-right',
+      style: {
+        background: '#fef2f2',
+        color: '#991b1b',
+        border: '1px solid #ef4444',
+        maxWidth: '400px',
+      },
+      iconTheme: {
+        primary: '#ef4444',
+        secondary: '#fef2f2',
+      },
+    }
+  );
+};
+
 export const showConfirmationToast = (
   message: string,
   onConfirm: () => void,

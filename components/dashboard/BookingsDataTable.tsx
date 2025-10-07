@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import api from '@lib/axios'
 import {
   Table,
   TableBody,
@@ -35,119 +36,87 @@ import {
   ArrowUpDown,
   Eye,
   Edit,
-  Trash2
+  Trash2,
+  RefreshCw
 } from 'lucide-react'
 import { DatePicker } from '@components/ui/date-picker'
 
 interface Booking {
-  id: string
-  customer: {
+  id: number
+  user_id: number
+  service_id: number
+  therapist_id: number
+  appointment_date: string
+  appointment_time: string
+  status: 'pending' | 'confirmed' | 'checked_in' | 'checked_out' | 'completed' | 'cancelled' | 'no_show'
+  notes?: string
+  total_amount: number
+  created_at: string
+  updated_at: string
+  service: {
+    id: number
     name: string
-    avatar?: string
+    description: string
+    price: number
+    duration: number
+    image?: string
+    category: {
+      id: number
+      name: string
+    }
+  }
+  therapist: {
+    id: number
+    name: string
     email: string
+    phone?: string
+    image?: string
   }
-  amount: number
-  duration: number
-  staff: {
+  client: {
+    id: number
     name: string
-    avatar?: string
+    email: string
+    phone?: string
   }
-  services: string[]
-  status: 'pending' | 'confirmed' | 'in-progress' | 'completed' | 'cancelled'
-  date: string
-  time: string
+  payment?: {
+    id: number
+    amount: number
+    status: 'unpaid' | 'pending' | 'paid' | 'failed' | 'refunded'
+    payment_method: 'cash' | 'toyyibpay'
+    toyyibpay_transaction_id?: string
+    paid_at?: string
+  }
 }
 
-// Sample data
-const bookingsData: Booking[] = [
-  {
-    id: 'BK001',
-    customer: {
-      name: 'Sarah Johnson',
-      email: 'sarah@email.com'
-    },
-    amount: 150.00,
-    duration: 90,
-    staff: {
-      name: 'Maya Chen'
-    },
-    services: ['Facial Treatment', 'Eye Care'],
-    status: 'confirmed',
-    date: '2024-01-15',
-    time: '10:00 AM'
-  },
-  {
-    id: 'BK002',
-    customer: {
-      name: 'Maria Lim',
-      email: 'maria@email.com'
-    },
-    amount: 200.00,
-    duration: 120,
-    staff: {
-      name: 'Lisa Wong'
-    },
-    services: ['Body Massage', 'Body Scrub'],
-    status: 'in-progress',
-    date: '2024-01-15',
-    time: '2:00 PM'
-  },
-  {
-    id: 'BK003',
-    customer: {
-      name: 'John Doe',
-      email: 'john@email.com'
-    },
-    amount: 80.00,
-    duration: 60,
-    staff: {
-      name: 'Amy Tan'
-    },
-    services: ['Hair Care'],
-    status: 'pending',
-    date: '2024-01-16',
-    time: '11:30 AM'
-  },
-  {
-    id: 'BK004',
-    customer: {
-      name: 'Lisa Chen',
-      email: 'lisa@email.com'
-    },
-    amount: 120.00,
-    duration: 75,
-    staff: {
-      name: 'Maya Chen'
-    },
-    services: ['Nail Care', 'Hand Treatment'],
-    status: 'completed',
-    date: '2024-01-14',
-    time: '3:00 PM'
-  },
-  {
-    id: 'BK005',
-    customer: {
-      name: 'David Wong',
-      email: 'david@email.com'
-    },
-    amount: 180.00,
-    duration: 100,
-    staff: {
-      name: 'Lisa Wong'
-    },
-    services: ['Body Massage', 'Facial Treatment'],
-    status: 'cancelled',
-    date: '2024-01-16',
-    time: '4:30 PM'
+// Helper function to format date
+const formatDate = (dateString: string): string => {
+  if (!dateString) return 'N/A'
+  const [year, month, day] = dateString.split('T')[0].split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+}
+
+// Helper function to format time
+const formatTime = (timeString: string): string => {
+  if (!timeString) return 'N/A'
+  let timeOnly = timeString
+  if (timeString.includes('T')) {
+    timeOnly = timeString.split('T')[1].split('.')[0]
   }
-]
+  const [hours, minutes] = timeOnly.split(':').map(Number)
+  const period = hours >= 12 ? 'PM' : 'AM'
+  const displayHours = hours % 12 || 12
+  return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`
+}
 
 const statusConfig = {
   pending: { label: 'Pending', color: 'bg-yellow-100 text-yellow-800' },
   confirmed: { label: 'Confirmed', color: 'bg-blue-100 text-blue-800' },
-  'in-progress': { label: 'In Progress', color: 'bg-purple-100 text-purple-800' },
+  checked_in: { label: 'Checked In', color: 'bg-indigo-100 text-indigo-800' },
+  checked_out: { label: 'Checked Out', color: 'bg-purple-100 text-purple-800' },
   completed: { label: 'Completed', color: 'bg-green-100 text-green-800' },
-  cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800' }
+  cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800' },
+  no_show: { label: 'No Show', color: 'bg-gray-100 text-gray-800' }
 }
 
 export function BookingsDataTable() {
@@ -157,27 +126,48 @@ export function BookingsDataTable() {
   const [dateRange, setDateRange] = useState<{from?: Date, to?: Date}>({})
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const [sortBy, setSortBy] = useState<{key: keyof Booking | 'customer.name' | 'staff.name', order: 'asc' | 'desc'}>({
-    key: 'date',
+  const [sortBy, setSortBy] = useState<{key: keyof Booking | 'client.name' | 'therapist.name', order: 'asc' | 'desc'}>({
+    key: 'appointment_date',
     order: 'desc'
   })
+  const [bookingsData, setBookingsData] = useState<Booking[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  // Fetch bookings from API
+  useEffect(() => {
+    const fetchBookings = async () => {
+      try {
+        setIsLoading(true)
+        const response = await api.get('/admin/bookings')
+        setBookingsData(response.data.data || [])
+      } catch (error) {
+        console.error('Failed to fetch bookings:', error)
+        setBookingsData([])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    
+    fetchBookings()
+  }, [])
 
   // Get unique staff names for filter
-  const staffOptions = Array.from(new Set(bookingsData.map(booking => booking.staff.name)))
+  const staffOptions = Array.from(new Set(bookingsData.map(booking => booking.therapist.name)))
 
   // Filter and sort data
   const filteredData = bookingsData
     .filter(booking => {
-      const matchesSearch = booking.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           booking.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           booking.services.some(service => service.toLowerCase().includes(searchTerm.toLowerCase()))
+      const matchesSearch = booking.client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           booking.id.toString().includes(searchTerm.toLowerCase()) ||
+                           booking.service.name.toLowerCase().includes(searchTerm.toLowerCase())
       
       const matchesStatus = statusFilter === 'all' || booking.status === statusFilter
-      const matchesStaff = staffFilter === 'all' || booking.staff.name === staffFilter
+      const matchesStaff = staffFilter === 'all' || booking.therapist.name === staffFilter
       
       let matchesDate = true
       if (dateRange.from && dateRange.to) {
-        const bookingDate = new Date(booking.date)
+        const [year, month, day] = booking.appointment_date.split('T')[0].split('-').map(Number)
+        const bookingDate = new Date(year, month - 1, day)
         matchesDate = bookingDate >= dateRange.from && bookingDate <= dateRange.to
       }
       
@@ -186,12 +176,12 @@ export function BookingsDataTable() {
     .sort((a, b) => {
       let aValue: unknown, bValue: unknown
       
-      if (sortBy.key === 'customer.name') {
-        aValue = a.customer.name
-        bValue = b.customer.name
-      } else if (sortBy.key === 'staff.name') {
-        aValue = a.staff.name
-        bValue = b.staff.name
+      if (sortBy.key === 'client.name') {
+        aValue = a.client.name
+        bValue = b.client.name
+      } else if (sortBy.key === 'therapist.name') {
+        aValue = a.therapist.name
+        bValue = b.therapist.name
       } else {
         aValue = a[sortBy.key as keyof Booking]
         bValue = b[sortBy.key as keyof Booking]
@@ -208,7 +198,7 @@ export function BookingsDataTable() {
   const totalPages = Math.ceil(filteredData.length / pageSize)
   const paginatedData = filteredData.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 
-  const handleSort = (key: keyof Booking | 'customer.name' | 'staff.name') => {
+  const handleSort = (key: keyof Booking | 'client.name' | 'therapist.name') => {
     setSortBy(prev => ({
       key,
       order: prev.key === key && prev.order === 'asc' ? 'desc' : 'asc'
@@ -266,10 +256,10 @@ export function BookingsDataTable() {
 
           <Select value={staffFilter} onValueChange={setStaffFilter}>
             <SelectTrigger className="w-40">
-              <SelectValue placeholder="Staff" />
+              <SelectValue placeholder="Therapist" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Staff</SelectItem>
+              <SelectItem value="all">All Therapists</SelectItem>
               {staffOptions.map((staff) => (
                 <SelectItem key={staff} value={staff}>
                   {staff}
@@ -315,41 +305,41 @@ export function BookingsDataTable() {
               </TableHead>
               <TableHead 
                 className="cursor-pointer"
-                onClick={() => handleSort('customer.name')}
+                onClick={() => handleSort('client.name')}
               >
                 <div className="flex items-center gap-2">
                   Customer
                   <ArrowUpDown className="h-4 w-4" />
                 </div>
               </TableHead>
+              <TableHead>Service</TableHead>
               <TableHead 
                 className="cursor-pointer"
-                onClick={() => handleSort('amount')}
+                onClick={() => handleSort('appointment_date')}
+              >
+                <div className="flex items-center gap-2">
+                  Date
+                  <ArrowUpDown className="h-4 w-4" />
+                </div>
+              </TableHead>
+              <TableHead 
+                className="cursor-pointer"
+                onClick={() => handleSort('therapist.name')}
+              >
+                <div className="flex items-center gap-2">
+                  Therapist
+                  <ArrowUpDown className="h-4 w-4" />
+                </div>
+              </TableHead>
+              <TableHead 
+                className="cursor-pointer"
+                onClick={() => handleSort('total_amount')}
               >
                 <div className="flex items-center gap-2">
                   Amount
                   <ArrowUpDown className="h-4 w-4" />
                 </div>
               </TableHead>
-              <TableHead 
-                className="cursor-pointer"
-                onClick={() => handleSort('duration')}
-              >
-                <div className="flex items-center gap-2">
-                  Duration
-                  <ArrowUpDown className="h-4 w-4" />
-                </div>
-              </TableHead>
-              <TableHead 
-                className="cursor-pointer"
-                onClick={() => handleSort('staff.name')}
-              >
-                <div className="flex items-center gap-2">
-                  Staff
-                  <ArrowUpDown className="h-4 w-4" />
-                </div>
-              </TableHead>
-              <TableHead>Services</TableHead>
               <TableHead 
                 className="cursor-pointer"
                 onClick={() => handleSort('status')}
@@ -363,45 +353,60 @@ export function BookingsDataTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginatedData.map((booking) => (
-              <TableRow key={booking.id}>
-                <TableCell className="font-medium">{booking.id}</TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={booking.customer.avatar} />
-                      <AvatarFallback>
-                        {booking.customer.name.split(' ').map(n => n[0]).join('')}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div className="font-medium">{booking.customer.name}</div>
-                      <div className="text-sm text-gray-500">{booking.customer.email}</div>
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={8} className="h-24 text-center">
+                  <div className="flex items-center justify-center gap-2">
+                    <RefreshCw className="h-5 w-5 animate-spin text-gray-400" />
+                    <span className="text-gray-500">Loading bookings...</span>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : paginatedData.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} className="h-24 text-center">
+                  <span className="text-gray-500">No bookings found</span>
+                </TableCell>
+              </TableRow>
+            ) : (
+              paginatedData.map((booking) => (
+                <TableRow key={booking.id}>
+                  <TableCell className="font-medium">#{booking.id}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback>
+                          {booking.client.name.split(' ').map(n => n[0]).join('')}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <div className="font-medium">{booking.client.name}</div>
+                        <div className="text-sm text-gray-500">{booking.client.email}</div>
+                      </div>
                     </div>
-                  </div>
-                </TableCell>
-                <TableCell>RM {booking.amount.toFixed(2)}</TableCell>
-                <TableCell>{booking.duration} min</TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <Avatar className="h-6 w-6">
-                      <AvatarImage src={booking.staff.avatar} />
-                      <AvatarFallback className="text-xs">
-                        {booking.staff.name.split(' ').map(n => n[0]).join('')}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="text-sm">{booking.staff.name}</span>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-wrap gap-1">
-                    {booking.services.map((service, index) => (
-                      <Badge key={index} variant="secondary" className="text-xs">
-                        {service}
-                      </Badge>
-                    ))}
-                  </div>
-                </TableCell>
+                  </TableCell>
+                  <TableCell>
+                    <div className="font-medium">{booking.service.name}</div>
+                    <div className="text-sm text-gray-500">{booking.service.duration} min</div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="font-medium">{formatDate(booking.appointment_date)}</div>
+                    <div className="text-sm text-gray-500">{formatTime(booking.appointment_time)}</div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-6 w-6">
+                        <AvatarFallback className="text-xs">
+                          {booking.therapist.name.split(' ').map(n => n[0]).join('')}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <div className="text-sm font-medium">{booking.therapist.name}</div>
+                        <div className="text-xs text-gray-500">{booking.therapist.email}</div>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>RM {Number(booking.total_amount).toFixed(2)}</TableCell>
                 <TableCell>
                   <Badge className={statusConfig[booking.status].color}>
                     {statusConfig[booking.status].label}
@@ -436,7 +441,8 @@ export function BookingsDataTable() {
                   </DropdownMenu>
                 </TableCell>
               </TableRow>
-            ))}
+            ))
+            )}
           </TableBody>
         </Table>
       </div>

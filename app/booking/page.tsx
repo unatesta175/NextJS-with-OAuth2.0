@@ -1,551 +1,1194 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useQuery } from "@tanstack/react-query";
+import { useRouter, useSearchParams } from "next/navigation";
+import api from "@lib/axios";
 import { Button } from "@components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@components/ui/card";
 import { Badge } from "@components/ui/badge";
 import { Calendar } from "@components/ui/calendar";
 import { Form } from "@components/ui/form";
-import { ArrowLeft, ArrowRight, Clock, MapPin, CreditCard } from "lucide-react";
+import { LoginModal } from "@components/ui/login-modal";
+import { ArrowLeft, ArrowRight, Clock, MapPin, CreditCard, User, Star, CheckCircle, DollarSign, Calendar as CalendarIcon } from "lucide-react";
 import { cn } from "@lib/utils";
+import { showSuccessToast, showErrorToast } from "@lib/toast";
+
+// Interfaces
+interface BookingData {
+  service_id: number;
+  therapist_id: number;
+  appointment_date: string;
+  appointment_time: string;
+  notes?: string;
+  payment_method: 'cash' | 'toyyibpay';
+}
+
+interface Therapist {
+  id: number;
+  name: string;
+  email: string;
+  phone?: string;
+  image?: string;
+  rating?: number;
+  experience?: string;
+  specialties?: string[];
+}
+
+interface TimeSlot {
+  time: string;
+  available: boolean;
+}
+
+// Helper functions
+const generateTimeSlots = (): string[] => {
+  const slots: string[] = [];
+  const startHour = 8;
+  const endHour = 18;
+  
+  for (let hour = startHour; hour < endHour; hour++) {
+    for (let minute = 0; minute < 60; minute += 15) {
+      const time = new Date();
+      time.setHours(hour, minute, 0, 0);
+      
+      const timeString = time.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+      
+      slots.push(timeString);
+    }
+  }
+  
+  return slots;
+};
+
+const formatTimeForBackend = (timeString: string): string => {
+  const time = new Date(`1970-01-01 ${timeString}`);
+  
+  if (isNaN(time.getTime())) {
+    const match = timeString.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+    if (match) {
+      let hours = parseInt(match[1]);
+      const minutes = match[2];
+      const period = match[3].toUpperCase();
+      
+      if (period === 'PM' && hours !== 12) {
+        hours += 12;
+      } else if (period === 'AM' && hours === 12) {
+        hours = 0;
+      }
+      
+      return `${hours.toString().padStart(2, '0')}:${minutes}:00`;
+    }
+    
+    return timeString.includes(':') ? `${timeString}:00` : timeString;
+  }
+  
+  return time.toTimeString().split(' ')[0];
+};
 
 const bookingSchema = z.object({
   categoryId: z.number().min(1, "Please select a category"),
   serviceId: z.number().min(1, "Please select a service"),
-  branchId: z.number().min(1, "Please select a branch"),
   therapistId: z.number().min(1, "Please select a therapist"),
   date: z.date({ message: "Please select a date" }),
   timeslot: z.string().min(1, "Please select a time slot"),
+  paymentMethod: z.enum(["cash", "toyyibpay"], { message: "Please select a payment method" }),
+  notes: z.string().optional(),
 });
 
 type BookingFormData = z.infer<typeof bookingSchema>;
 
-// Dummy data (will be replaced with API calls)
-const fetchCategories = async () => [
-  { id: 1, name: "Facial Treatments", description: "Rejuvenating facial therapies for glowing skin", icon: "✨" },
-  { id: 2, name: "Body Treatments", description: "Relaxing full-body wellness experiences", icon: "💆" },
-  { id: 3, name: "Hair & Scalp", description: "Professional hair care and scalp treatments", icon: "💇" },
-];
-
+// Fetch services by category
 const fetchServices = async (categoryId: number) => {
-  const all: Record<number, Array<{id: number; name: string; price: number; duration: number; description: string}>> = {
-    1: [
-      { id: 101, name: "Deep Cleansing Facial", price: 120, duration: 60, description: "Deep pore cleansing with extraction" },
-      { id: 102, name: "Anti-Aging Treatment", price: 180, duration: 90, description: "Advanced anti-aging therapy" },
-      { id: 103, name: "Hydrating Facial", price: 150, duration: 75, description: "Intense hydration for dry skin" },
-    ],
-    2: [
-      { id: 201, name: "Full Body Massage", price: 200, duration: 90, description: "Complete relaxation massage" },
-      { id: 202, name: "Hot Stone Therapy", price: 250, duration: 120, description: "Therapeutic hot stone treatment" },
-      { id: 203, name: "Body Scrub & Wrap", price: 180, duration: 90, description: "Exfoliating scrub with nourishing wrap" },
-    ],
-    3: [
-      { id: 301, name: "Hair Treatment", price: 100, duration: 60, description: "Nourishing hair restoration" },
-      { id: 302, name: "Scalp Massage", price: 80, duration: 45, description: "Relaxing scalp therapy" },
-      { id: 303, name: "Hair Styling", price: 60, duration: 30, description: "Professional hair styling" },
-    ],
-  };
-  return all[categoryId] || [];
-};
-
-const fetchBranches = async () => [
-  { id: 1, name: "Kapas Spa KL Central", address: "123 Wellness Street, KL", distance: "2.5 km" },
-  { id: 2, name: "Kapas Spa Mont Kiara", address: "456 Mont Kiara, KL", distance: "5.1 km" },
-  { id: 3, name: "Kapas Spa KLCC", address: "789 KLCC, KL", distance: "3.2 km" },
-];
-
-const fetchTherapists = async (serviceId: number) => {
-  const all: Record<number, Array<{id: number; name: string; rating: number; experience: string; specialties: string[]}>> = {
-    101: [
-      { id: 1, name: "Alicia Tan", rating: 4.9, experience: "5 years", specialties: ["Facial", "Anti-aging"] },
-      { id: 2, name: "Siti Rahman", rating: 4.8, experience: "3 years", specialties: ["Facial", "Hydration"] },
-    ],
-    102: [
-      { id: 2, name: "Siti Rahman", rating: 4.8, experience: "3 years", specialties: ["Facial", "Hydration"] },
-      { id: 3, name: "Nurul Izzah", rating: 4.9, experience: "7 years", specialties: ["Anti-aging", "Luxury"] },
-    ],
-    201: [
-      { id: 4, name: "Maya Lee", rating: 4.9, experience: "6 years", specialties: ["Swedish", "Deep tissue"] },
-      { id: 5, name: "Farah Lim", rating: 4.7, experience: "4 years", specialties: ["Relaxation", "Sports"] },
-    ],
-  };
-  return all[serviceId] || [];
-};
-
-const fetchTimeslots = async () => {
-  // Mock available timeslots based on date and therapist
-  const baseSlots = ["09:00", "10:30", "12:00", "13:30", "15:00", "16:30"];
-  // Randomly remove some slots to simulate booking
-  return baseSlots.filter(() => Math.random() > 0.3);
+  try {
+    const response = await fetch(`http://localhost:8000/api/service-categories/${categoryId}/services`);
+    if (!response.ok) throw new Error('Failed to fetch services');
+    const data = await response.json();
+    return data.data || [];
+  } catch (error) {
+    console.error('Error fetching services:', error);
+    return [];
+  }
 };
 
 export default function BookingPage() {
-  const [step, setStep] = useState<"category" | "service" | "branch" | "date" | "therapist" | "timeslot" | "confirm">("category");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const serviceIdFromUrl = searchParams.get('service');
+  
+  // Auth state
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  
+  const [step, setStep] = useState<"category" | "service" | "therapist" | "date" | "timeslot" | "payment" | "confirm">("category");
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
-  const [selectedService, setSelectedService] = useState<{id: number; name: string; price: number; duration: number; description: string} | null>(null);
-  const [selectedBranch, setSelectedBranch] = useState<{id: number; name: string; address: string; distance: string} | null>(null);
+  const [selectedService, setSelectedService] = useState<any | null>(null);
+  const [selectedTherapist, setSelectedTherapist] = useState<any | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
-  const [selectedTherapist, setSelectedTherapist] = useState<{id: number; name: string; rating: number; experience: string; specialties: string[]} | null>(null);
   const [selectedTimeslot, setSelectedTimeslot] = useState<string | null>(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<"cash" | "toyyibpay" | null>(null);
+  const [notes, setNotes] = useState<string>("");
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  
+  // Data states
+  const [categories, setCategories] = useState<any[]>([]);
+  const [services, setServices] = useState<any[]>([]);
+  const [therapists, setTherapists] = useState<any[]>([]);
+  const [availableSlots, setAvailableSlots] = useState<any[]>([]);
+  
+  // Loading states
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [loadingServices, setLoadingServices] = useState(false);
+  const [loadingTherapists, setLoadingTherapists] = useState(false);
+  const [loadingTimeslots, setLoadingTimeslots] = useState(false);
+  
+  // Generate available time slots
+  const availableTimeSlots = generateTimeSlots();
+  
+  // Track if toast has been shown to prevent duplicates
+  const toastShownRef = useRef(false);
+
+  // Check authentication status
+  const checkAuth = async () => {
+    try {
+      const response = await api.get('/auth/me');
+      setUser(response.data.user);
+      setIsAuthenticated(true);
+    } catch (error) {
+      setIsAuthenticated(false);
+      setUser(null);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  // Fetch service from URL parameter and skip to therapist step
+  useEffect(() => {
+    if (serviceIdFromUrl && categories.length > 0 && !selectedService) {
+      const fetchServiceFromUrl = async () => {
+        try {
+          setLoadingServices(true);
+          console.log('🔗 Fetching service from URL:', serviceIdFromUrl);
+          const response = await api.get(`/services/${serviceIdFromUrl}`);
+          const service = response.data.data;
+          
+          console.log('✅ Service fetched successfully:', service.name);
+          
+          // Set the service and category
+          setSelectedService(service);
+          if (service.category) {
+            setSelectedCategory(service.category.id);
+          }
+          
+          // Skip to therapist selection step
+          setTimeout(() => {
+            setStep("therapist");
+            // Only show toast once
+            if (!toastShownRef.current) {
+              showSuccessToast(`Service "${service.name}" selected. Choose a therapist to continue.`);
+              toastShownRef.current = true;
+            }
+          }, 100);
+          
+        } catch (error) {
+          console.error('❌ Error fetching service from URL:', error);
+          showErrorToast('Failed to load service. Starting from beginning.');
+          setStep("category");
+        } finally {
+          setLoadingServices(false);
+        }
+      };
+      
+      fetchServiceFromUrl();
+    }
+  }, [serviceIdFromUrl, categories, selectedService]);
 
   const form = useForm<BookingFormData>({
     resolver: zodResolver(bookingSchema),
     defaultValues: {
       categoryId: 0,
       serviceId: 0,
-      branchId: 0,
       therapistId: 0,
       date: undefined,
       timeslot: "",
+      paymentMethod: "cash" as const,
+      notes: "",
     },
   });
 
-  const { data: categories, isLoading: loadingCategories } = useQuery({
-    queryKey: ["categories"],
-    queryFn: fetchCategories,
-  });
+  // Fetch categories on component mount
+  useEffect(() => {
+    const fetchCategories = async () => {
+      setLoadingCategories(true);
+      try {
+        const response = await api.get('/service-categories');
+        setCategories(response.data.data);
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+        showErrorToast('Failed to load categories');
+      } finally {
+        setLoadingCategories(false);
+      }
+    };
+    
+    fetchCategories();
+  }, []);
 
-  const { data: services, isLoading: loadingServices } = useQuery({
-    queryKey: ["services", selectedCategory],
-    queryFn: () => selectedCategory ? fetchServices(selectedCategory) : [],
-    enabled: !!selectedCategory,
-  });
+  // Update form values when service/category are selected from URL
+  useEffect(() => {
+    if (selectedService && selectedCategory) {
+      form.setValue("serviceId", selectedService.id);
+      form.setValue("categoryId", selectedCategory);
+    }
+  }, [selectedService, selectedCategory, form]);
 
-  const { data: branches } = useQuery({
-    queryKey: ["branches"],
-    queryFn: fetchBranches,
-  });
+  // Fetch services when category changes
+  useEffect(() => {
+    if (selectedCategory) {
+      const fetchServicesData = async () => {
+        setLoadingServices(true);
+        try {
+          const data = await fetchServices(selectedCategory);
+          setServices(data);
+        } catch (error) {
+          console.error('Error fetching services:', error);
+          showErrorToast('Failed to load services');
+        } finally {
+          setLoadingServices(false);
+        }
+      };
+      
+      fetchServicesData();
+    } else {
+      setServices([]);
+    }
+  }, [selectedCategory]);
 
-  const { data: therapists, isLoading: loadingTherapists } = useQuery({
-    queryKey: ["therapists", selectedService?.id],
-    queryFn: () => selectedService ? fetchTherapists(selectedService.id) : [],
-    enabled: !!selectedService,
-  });
+  // Fetch therapists when service changes
+  useEffect(() => {
+    if (selectedService) {
+      const fetchTherapists = async () => {
+        setLoadingTherapists(true);
+        try {
+          const response = await api.get(`/services/${selectedService.id}/therapists`);
+          setTherapists(response.data.data);
+        } catch (error) {
+          console.error('Error fetching therapists:', error);
+          showErrorToast('Failed to load therapists');
+        } finally {
+          setLoadingTherapists(false);
+        }
+      };
+      
+      fetchTherapists();
+    } else {
+      setTherapists([]);
+    }
+  }, [selectedService]);
 
-  const { data: timeslots, isLoading: loadingTimeslots } = useQuery({
-    queryKey: ["timeslots", selectedDate, selectedTherapist?.id],
-    queryFn: () => selectedDate && selectedTherapist ? fetchTimeslots() : [],
-    enabled: !!selectedDate && !!selectedTherapist,
-  });
+  // Fetch available time slots when therapist and date change
+  useEffect(() => {
+    console.log('=== AVAILABILITY EFFECT TRIGGERED ===');
+    console.log('selectedTherapist:', selectedTherapist?.id);
+    console.log('selectedDate:', selectedDate);
+    console.log('selectedDate type:', typeof selectedDate);
+    console.log('selectedDate toString:', selectedDate?.toString());
+    
+    if (!selectedTherapist || !selectedDate) {
+      console.log('Missing therapist or date, clearing slots');
+      setAvailableSlots([]);
+      return;
+    }
+
+    // Validate date is not in the past
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selectedDateOnly = new Date(selectedDate);
+    selectedDateOnly.setHours(0, 0, 0, 0);
+    
+    console.log('Date validation:');
+    console.log('- today:', today.toISOString().split('T')[0]);
+    console.log('- selectedDateOnly:', selectedDateOnly.toISOString().split('T')[0]);
+    console.log('- is past?:', selectedDateOnly < today);
+    
+    if (selectedDateOnly < today) {
+      console.log('🚫 PREVENTING API call for past date:', selectedDate);
+      console.log('🧹 Clearing invalid date and timeslot');
+      // Clear the invalid date
+      setSelectedDate(undefined);
+      setSelectedTimeslot(null);
+      setAvailableSlots([]);
+      return;
+    }
+    
+    const fetchAvailability = async () => {
+      setLoadingTimeslots(true);
+      try {
+        // Fix timezone issue: use local date format instead of ISO
+        const year = selectedDate.getFullYear();
+        const month = String(selectedDate.getMonth() + 1).padStart(2, '0'); // +1 because getMonth() is 0-based
+        const day = String(selectedDate.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
+        
+        console.log('🔧 TIMEZONE FIX:');
+        console.log('- selectedDate object:', selectedDate);
+        console.log('- getFullYear():', selectedDate.getFullYear());
+        console.log('- getMonth() (0-based):', selectedDate.getMonth());
+        console.log('- getDate():', selectedDate.getDate());
+        console.log('- OLD toISOString():', selectedDate.toISOString().split('T')[0]);
+        console.log('- NEW local format:', dateStr);
+        
+        console.log('✅ MAKING API CALL - Fetching availability for therapist:', selectedTherapist.id, 'date:', dateStr);
+        const response = await api.get(`/therapists/${selectedTherapist.id}/availability`, {
+          params: { date: dateStr }
+        });
+        const data = response.data.data;
+        console.log('✅ API SUCCESS - Received availability data:', data);
+        setAvailableSlots(data);
+      } catch (error: any) {
+        console.error('❌ API ERROR - Error fetching availability:', error);
+        console.error('❌ Error details:', {
+          message: error.message,
+          status: error.response?.status,
+          data: error.response?.data
+        });
+        showErrorToast('Failed to load available time slots');
+        setAvailableSlots([]);
+      } finally {
+        setLoadingTimeslots(false);
+      }
+    };
+    
+    fetchAvailability();
+  }, [selectedTherapist, selectedDate]);
 
   const selectedCategoryObj = categories?.find((c) => c.id === selectedCategory);
+  
+  // Clear invalid dates on component mount or when date becomes invalid
+  useEffect(() => {
+    if (selectedDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const selectedDateOnly = new Date(selectedDate);
+      selectedDateOnly.setHours(0, 0, 0, 0);
+      
+      if (selectedDateOnly < today) {
+        console.log('Clearing invalid date:', selectedDate);
+        setSelectedDate(undefined);
+        setSelectedTimeslot(null);
+      }
+    }
+  }, [selectedDate]);
 
-  const steps = ["category", "service", "branch", "date", "therapist", "timeslot", "confirm"];
+  // Clear invalid dates on component mount
+  useEffect(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (selectedDate) {
+      const selectedDateOnly = new Date(selectedDate);
+      selectedDateOnly.setHours(0, 0, 0, 0);
+      
+      if (selectedDateOnly < today) {
+        console.log('Clearing past date on mount:', selectedDate);
+        setSelectedDate(undefined);
+        setSelectedTimeslot(null);
+      }
+    }
+  }, []); // Run once on mount
+
+  const steps = ["category", "service", "therapist", "date", "timeslot", "payment", "confirm"];
   const currentStepIndex = steps.indexOf(step);
 
   const onSubmit = async (data: BookingFormData) => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true);
+      return;
+    }
+    
+    if (!selectedService || !selectedTherapist || !selectedDate || !selectedTimeslot || !selectedPaymentMethod) {
+      showErrorToast('Please complete all booking details');
+      return;
+    }
+    
     setIsProcessingPayment(true);
+    
     try {
-      // Simulate payment processing
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      // TODO: Implement actual booking API call
-      console.log('Processing booking:', data);
-      console.log('Booking details:', {
-        service: selectedService,
-        therapist: selectedTherapist,
-        branch: selectedBranch,
-        date: selectedDate,
-        timeslot: selectedTimeslot,
-        amount: selectedService?.price
+      // Fix timezone issue for booking submission
+      const year = selectedDate.getFullYear();
+      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+      const day = String(selectedDate.getDate()).padStart(2, '0');
+      const appointmentDate = `${year}-${month}-${day}`;
+      
+      console.log('🔧 BOOKING TIMEZONE FIX:');
+      console.log('- selectedDate:', selectedDate);
+      console.log('- OLD toISOString():', selectedDate.toISOString().split('T')[0]);
+      console.log('- NEW local format:', appointmentDate);
+
+      const bookingData: BookingData = {
+        service_id: selectedService.id,
+        therapist_id: selectedTherapist.id,
+        appointment_date: appointmentDate,
+        appointment_time: formatTimeForBackend(selectedTimeslot),
+        payment_method: selectedPaymentMethod,
+        notes: notes || undefined,
+      };
+
+      console.log('Submitting booking data:', bookingData);
+      const apiResponse = await api.post('/bookings', bookingData);
+      const response = apiResponse.data;
+      
+      console.log('Booking response:', response);
+      console.log('Payment method:', selectedPaymentMethod);
+      console.log('Payment URL:', response.payment_url);
+      
+      // Check if ToyyibPay payment URL is provided
+      console.log('Checking redirect conditions:', {
+        hasPaymentUrl: !!response.payment_url,
+        paymentMethod: selectedPaymentMethod,
+        isToyyibpay: selectedPaymentMethod === 'toyyibpay',
+        shouldRedirect: response.payment_url && selectedPaymentMethod === 'toyyibpay'
       });
-      // On success, redirect to success page or show confirmation
-      alert('Booking confirmed! You will receive a confirmation email shortly.');
-    } catch (error) {
-      console.error('Booking failed:', error);
-      alert('Booking failed. Please try again.');
+      
+      if (response.payment_url && selectedPaymentMethod === 'toyyibpay') {
+        showSuccessToast('Booking created! Redirecting to payment...');
+        console.log('Redirecting to:', response.payment_url);
+        // Redirect to ToyyibPay payment page
+        window.location.href = response.payment_url;
+        return;
+      }
+      
+      showSuccessToast('Booking created successfully!');
+      router.push('/my-bookings');
+    } catch (error: any) {
+      console.error('Booking creation failed:', error);
+      showErrorToast(error.response?.data?.message || 'Failed to create booking');
     } finally {
       setIsProcessingPayment(false);
     }
   };
 
-  const handlePaymentSubmit = () => {
-    // Update form values before submission
-    if (selectedService && selectedBranch && selectedTherapist && selectedDate && selectedTimeslot) {
-      form.setValue("categoryId", selectedCategory || 0);
-      form.setValue("serviceId", selectedService.id);
-      form.setValue("branchId", selectedBranch.id);
-      form.setValue("therapistId", selectedTherapist.id);
-      form.setValue("date", selectedDate);
-      form.setValue("timeslot", selectedTimeslot);
-      
-      form.handleSubmit(onSubmit)();
-    }
+  const handlePaymentSubmit = async () => {
+    await onSubmit(form.getValues());
   };
 
-  const goToNextStep = () => {
-    const nextIndex = currentStepIndex + 1;
-    if (nextIndex < steps.length) {
-      setStep(steps[nextIndex] as typeof step);
-    }
+  const nextStep = () => {
+    const nextIndex = Math.min(currentStepIndex + 1, steps.length - 1);
+    setStep(steps[nextIndex] as any);
   };
 
-  const goToPrevStep = () => {
-    const prevIndex = currentStepIndex - 1;
-    if (prevIndex >= 0) {
-      setStep(steps[prevIndex] as typeof step);
-    }
+  const prevStep = () => {
+    const prevIndex = Math.max(currentStepIndex - 1, 0);
+    setStep(steps[prevIndex] as any);
   };
+
+  const resetBooking = () => {
+    setStep("category");
+    setSelectedCategory(null);
+    setSelectedService(null);
+    setSelectedTherapist(null);
+    setSelectedDate(undefined);
+    setSelectedTimeslot(null);
+    setSelectedPaymentMethod(null);
+    setNotes("");
+    form.reset();
+  };
+
+  const resetDateSelection = () => {
+    console.log('Manually clearing state and resetting date selection');
+    setSelectedDate(undefined);
+    setSelectedTimeslot(null);
+    setAvailableSlots([]);
+  };
+
+  if (loadingCategories) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-pink-50 to-rose-100 dark:from-gray-900 dark:to-gray-800 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto" style={{ borderColor: '#ff0a85' }}></div>
+            <p className="mt-4 text-gray-600 dark:text-gray-400">Loading categories...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-50 to-purple-50 dark:from-gray-900 dark:to-gray-800 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-pink-50 to-rose-100 dark:from-gray-900 dark:to-gray-800 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
-        <Form {...form}>
-        {/* Progress Bar */}
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
+            Book Your Appointment
+          </h1>
+          <p className="text-xl text-gray-600 dark:text-gray-300">
+            Choose your perfect spa experience
+          </p>
+        </div>
+
+        {/* Progress Steps */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            {steps.map((s, i) => (
-              <div key={s} className={cn(
-                "flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium",
-                i <= currentStepIndex ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-              )}>
-                {i + 1}
+          <div className="flex items-center justify-between">
+            {steps.map((stepName, index) => (
+              <div
+                key={stepName}
+                className={cn(
+                  "flex items-center",
+                  index < steps.length - 1 && "flex-1"
+                )}
+              >
+                <div
+                  className={cn(
+                    "flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium",
+                    index <= currentStepIndex
+                      ? "text-white"
+                      : "bg-gray-300 text-gray-600"
+                  )}
+                  style={index <= currentStepIndex ? { backgroundColor: '#ff0a85' } : {}}
+                >
+                  {index + 1}
+                </div>
+                <span
+                  className={cn(
+                    "ml-2 text-sm font-medium capitalize",
+                    index <= currentStepIndex
+                      ? ""
+                      : "text-gray-500"
+                  )}
+                  style={index <= currentStepIndex ? { color: '#ff0a85' } : {}}
+                >
+                  {stepName}
+                </span>
+                {index < steps.length - 1 && (
+                  <div
+                    className={cn(
+                      "flex-1 h-0.5 mx-4",
+                      index < currentStepIndex
+                        ? ""
+                        : "bg-gray-300"
+                    )}
+                    style={index < currentStepIndex ? { backgroundColor: '#ff0a85' } : {}}
+                  />
+                )}
               </div>
             ))}
           </div>
-          <div className="w-full bg-muted rounded-full h-2">
-            <div 
-              className="bg-primary h-2 rounded-full transition-all duration-300"
-              style={{ width: `${((currentStepIndex + 1) / steps.length) * 100}%` }}
-            />
-          </div>
         </div>
 
-        {/* Category Selection */}
-        {step === "category" && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-2xl">Choose a Treatment Category</CardTitle>
-              <CardDescription>Select the type of service you&apos;re looking for</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loadingCategories ? (
-                <div className="text-center py-8">Loading categories...</div>
-              ) : (
-                <div className="grid md:grid-cols-3 gap-4">
-                  {categories?.map((category) => (
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {/* Step 1: Category Selection */}
+            {step === "category" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-2xl">Select Category</CardTitle>
+                  <CardDescription>Choose the type of service you're looking for</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {categories.map((category) => (
+                      <Card
+                        key={category.id}
+                        className={cn(
+                          "cursor-pointer transition-all duration-200 hover:shadow-lg",
+                          selectedCategory === category.id
+                            ? "ring-2 ring-pink-400 bg-pink-50 dark:bg-pink-950"
+                            : "hover:shadow-md"
+                        )}
+                        onClick={() => {
+                          setSelectedCategory(category.id);
+                          form.setValue("categoryId", category.id);
+                        }}
+                      >
+                        <CardContent className="p-6">
+                          <div className="text-center">
+                            <div className="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(to bottom right, #ff0a85, #ff69b4)' }}>
+                              <span className="text-2xl text-white">
+                                {category.name.charAt(0)}
+                              </span>
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                              {category.name}
+                            </h3>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              {category.description}
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                  
+                  <div className="flex justify-between mt-6">
+                    <Button type="button" variant="outline" onClick={resetBooking}>
+                      Reset
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={nextStep}
+                      disabled={!selectedCategory}
+                    >
+                      Next <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Step 2: Service Selection */}
+            {step === "service" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-2xl">Select Service</CardTitle>
+                  <CardDescription>
+                    Choose from our {selectedCategoryObj?.name} services
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingServices ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto" style={{ borderColor: '#ff0a85' }}></div>
+                      <p className="mt-2 text-gray-600 dark:text-gray-400">Loading services...</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {services.map((service) => (
+                        <Card
+                          key={service.id}
+                          className={cn(
+                            "cursor-pointer transition-all duration-200 hover:shadow-lg",
+                            selectedService?.id === service.id
+                              ? "ring-2 ring-pink-400 bg-pink-50 dark:bg-pink-950"
+                              : "hover:shadow-md"
+                          )}
+                          onClick={() => {
+                            setSelectedService(service);
+                            form.setValue("serviceId", service.id);
+                          }}
+                        >
+                          <CardContent className="p-6">
+                            <div className="flex justify-between items-start mb-4">
+                              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                {service.name}
+                              </h3>
+                              <Badge variant="secondary">
+                                RM{service.price}
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                              {service.description}
+                            </p>
+                            <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                              <Clock className="w-4 h-4 mr-1" />
+                              {service.duration} minutes
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                  
+                  <div className="flex justify-between mt-6">
+                    <Button type="button" variant="outline" onClick={prevStep}>
+                      <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={nextStep}
+                      disabled={!selectedService}
+                    >
+                      Next <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Step 3: Therapist Selection */}
+            {step === "therapist" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-2xl">Select Therapist</CardTitle>
+                  <CardDescription>Choose your preferred therapist</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingTherapists ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto" style={{ borderColor: '#ff0a85' }}></div>
+                      <p className="mt-2 text-gray-600 dark:text-gray-400">Loading therapists...</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {therapists.map((therapist) => (
+                        <Card
+                          key={therapist.id}
+                          className={cn(
+                            "cursor-pointer transition-all duration-200 hover:shadow-lg",
+                            selectedTherapist?.id === therapist.id
+                              ? "ring-2 ring-pink-400 bg-pink-50 dark:bg-pink-950"
+                              : "hover:shadow-md"
+                          )}
+                          onClick={() => {
+                            setSelectedTherapist(therapist);
+                            form.setValue("therapistId", therapist.id);
+                          }}
+                        >
+                          <CardContent className="p-6">
+                            <div className="text-center">
+                              <div className="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(to bottom right, #ff0a85, #ff69b4)' }}>
+                                <User className="w-8 h-8 text-white" />
+                              </div>
+                              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                                {therapist.name}
+                              </h3>
+                              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                                {therapist.email}
+                              </p>
+                              <div className="flex items-center justify-center">
+                                <Star className="w-4 h-4 text-yellow-400 fill-current" />
+                                <span className="ml-1 text-sm text-gray-600 dark:text-gray-400">
+                                  4.8 (124 reviews)
+                                </span>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                  
+                  <div className="flex justify-between mt-6">
+                    <Button type="button" variant="outline" onClick={prevStep}>
+                      <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={nextStep}
+                      disabled={!selectedTherapist}
+                    >
+                      Next <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Step 4: Date Selection */}
+            {step === "date" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-2xl">Select Date</CardTitle>
+                  <CardDescription>Choose your preferred appointment date</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="mb-4 p-3 bg-pink-50 dark:bg-pink-950 rounded-lg">
+                    <p className="text-sm dark:text-pink-300" style={{ color: '#ff0a85' }}>
+                      📅 Select a date for your appointment. Past dates and Sundays are not available.
+                    </p>
+                    <button 
+                      type="button"
+                      onClick={resetDateSelection}
+                      className="mt-2 text-xs underline"
+                      style={{ color: '#ff0a85' }}
+                      onMouseEnter={(e) => e.currentTarget.style.color = '#d10870'}
+                      onMouseLeave={(e) => e.currentTarget.style.color = '#ff0a85'}
+                    >
+                      Reset Date Selection
+                    </button>
+                  </div>
+                  <div className="flex justify-center">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={(date) => {
+                        console.log('📅 CALENDAR onSelect triggered with date:', date);
+                        console.log('📅 Raw date object:', date);
+                        console.log('📅 Date toString():', date?.toString());
+                        console.log('📅 Date toLocaleDateString():', date?.toLocaleDateString());
+                        console.log('📅 Date toISOString():', date?.toISOString());
+                        console.log('📅 Date getFullYear():', date?.getFullYear());
+                        console.log('📅 Date getMonth():', date?.getMonth()); // 0-based!
+                        console.log('📅 Date getDate():', date?.getDate());
+                        
+                        if (date) {
+                          const today = new Date();
+                          today.setHours(0, 0, 0, 0);
+                          const selectedDateOnly = new Date(date);
+                          selectedDateOnly.setHours(0, 0, 0, 0);
+                          
+                          console.log('📅 Calendar date validation:');
+                          console.log('- selected date ISO:', selectedDateOnly.toISOString().split('T')[0]);
+                          console.log('- today ISO:', today.toISOString().split('T')[0]);
+                          console.log('- is future/today?:', selectedDateOnly >= today);
+                          console.log('- is not Sunday?:', date.getDay() !== 0);
+                          
+                          // Only allow future dates (including today)
+                          if (selectedDateOnly >= today && date.getDay() !== 0) {
+                            console.log('✅ Setting valid date:', date);
+                            setSelectedDate(date);
+                            // Clear selected timeslot when date changes
+                            setSelectedTimeslot(null);
+                            console.log('Date changed to:', date.toISOString().split('T')[0]);
+                          } else {
+                            console.log('❌ Rejecting invalid date:', date);
+                          }
+                        } else {
+                          console.log('📅 Calendar onSelect: date is null/undefined');
+                        }
+                      }}
+                      disabled={(date) => {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const selectedDateOnly = new Date(date);
+                        selectedDateOnly.setHours(0, 0, 0, 0);
+                        return selectedDateOnly < today || date.getDay() === 0; // Disable past dates and Sundays
+                      }}
+                      className="rounded-md border"
+                    />
+                  </div>
+                  
+                  <div className="flex justify-between mt-6">
+                    <Button type="button" variant="outline" onClick={prevStep}>
+                      <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={nextStep}
+                      disabled={!selectedDate}
+                    >
+                      Next <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Step 5: Time Slot Selection */}
+            {step === "timeslot" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-2xl">Select Time</CardTitle>
+                  <CardDescription>
+                    Choose your preferred time slot for {selectedDate?.toLocaleDateString()}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingTimeslots ? (
+                    <div className="text-center py-8">Loading available times...</div>
+                  ) : (
+                    <div className="space-y-4">
+                      {(() => {
+                        const availableSlotsList = availableTimeSlots.filter((slot) => {
+                          return !availableSlots || availableSlots.some(s => s.time === slot && s.available);
+                        });
+                        
+                        if (availableSlotsList.length === 0) {
+                          return (
+                            <div className="text-center py-8">
+                              <p className="text-gray-500">No available time slots for this date.</p>
+                              <p className="text-sm text-gray-400 mt-2">Please select a different date.</p>
+                            </div>
+                          );
+                        }
+                        
+                        return (
+                          <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
+                            {availableSlotsList.map((slot) => {
+                              return (
+                                <Button
+                                  key={slot}
+                                  type="button"
+                                  variant={selectedTimeslot === slot ? "default" : "outline"}
+                                  onClick={() => setSelectedTimeslot(slot)}
+                                  className="h-12"
+                                >
+                                  {slot}
+                                </Button>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
+                      {selectedService && (
+                        <div className="mt-4 p-3 bg-pink-50 dark:bg-pink-950 rounded-lg">
+                          <p className="text-sm dark:text-pink-300" style={{ color: '#ff0a85' }}>
+                            <Clock className="w-4 h-4 inline mr-1" />
+                            Service duration: {selectedService.duration + 30} minutes (includes 30 min preparation time)
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  <div className="flex justify-between mt-6">
+                    <Button type="button" variant="outline" onClick={prevStep}>
+                      <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={nextStep}
+                      disabled={!selectedTimeslot}
+                    >
+                      Next <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Step 6: Payment Method */}
+            {step === "payment" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-2xl">Payment Method</CardTitle>
+                  <CardDescription>Choose how you'd like to pay</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                     <Card
-                      key={category.id}
                       className={cn(
-                        "cursor-pointer hover:shadow-lg transition-all",
-                        selectedCategory === category.id && "ring-2 ring-primary"
+                        "cursor-pointer transition-all duration-200 hover:shadow-lg",
+                        selectedPaymentMethod === "cash"
+                          ? "ring-2 ring-pink-400 bg-pink-50 dark:bg-pink-950"
+                          : "hover:shadow-md"
                       )}
                       onClick={() => {
-                        setSelectedCategory(category.id);
-                        goToNextStep();
+                        setSelectedPaymentMethod("cash");
+                        form.setValue("paymentMethod", "cash");
                       }}
                     >
-                      <CardContent className="pt-6 text-center">
-                        <div className="text-4xl mb-3">{category.icon}</div>
-                        <h3 className="font-semibold mb-2">{category.name}</h3>
-                        <p className="text-sm text-muted-foreground">{category.description}</p>
+                      <CardContent className="p-6">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
+                            <DollarSign className="w-6 h-6 text-green-600 dark:text-green-400" />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                              Pay at Spa
+                            </h3>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              Pay with cash when you arrive
+                            </p>
+                          </div>
+                        </div>
                       </CardContent>
                     </Card>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
 
-        {/* Service Selection */}
-        {step === "service" && selectedCategory && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-2xl">Choose Your Service</CardTitle>
-              <CardDescription>Select from {selectedCategoryObj?.name} treatments</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {loadingServices ? (
-                  <div className="text-center py-8">Loading services...</div>
-                ) : (
-                  services?.map((service) => (
                     <Card
-                      key={service.id}
                       className={cn(
-                        "cursor-pointer hover:shadow-md transition-all",
-                        selectedService?.id === service.id && "ring-2 ring-primary"
+                        "cursor-pointer transition-all duration-200 hover:shadow-lg",
+                        selectedPaymentMethod === "toyyibpay"
+                          ? "ring-2 ring-pink-400 bg-pink-50 dark:bg-pink-950"
+                          : "hover:shadow-md"
                       )}
-                      onClick={() => setSelectedService(service)}
+                      onClick={() => {
+                        setSelectedPaymentMethod("toyyibpay");
+                        form.setValue("paymentMethod", "toyyibpay");
+                      }}
                     >
-                      <CardContent className="pt-4">
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-lg">{service.name}</h3>
-                            <p className="text-muted-foreground text-sm mb-2">{service.description}</p>
-                            <div className="flex items-center gap-4 text-sm">
-                              <Badge variant="secondary">
-                                <Clock className="w-3 h-3 mr-1" />
-                                {service.duration} min
-                              </Badge>
-                              <Badge variant="outline">RM {service.price}</Badge>
-                            </div>
+                      <CardContent className="p-6">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-12 h-12 bg-pink-100 dark:bg-pink-900 rounded-full flex items-center justify-center">
+                            <CreditCard className="w-6 h-6 dark:text-pink-400" style={{ color: '#ff0a85' }} />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                              ToyyibPay
+                            </h3>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              Pay online with card or FPX
+                            </p>
                           </div>
                         </div>
                       </CardContent>
                     </Card>
-                  ))
-                )}
-              </div>
-              <div className="flex gap-2 mt-6">
-                <Button variant="outline" onClick={goToPrevStep}>
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Back
-                </Button>
-                <Button onClick={goToNextStep} disabled={!selectedService}>
-                  Next: Choose Branch
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+                  </div>
 
-        {/* Branch Selection */}
-        {step === "branch" && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-2xl">Choose Location</CardTitle>
-              <CardDescription>Select your preferred spa branch</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {branches?.map((branch) => (
-                  <Card
-                    key={branch.id}
-                    className={cn(
-                      "cursor-pointer hover:shadow-md transition-all",
-                      selectedBranch?.id === branch.id && "ring-2 ring-primary"
-                    )}
-                    onClick={() => setSelectedBranch(branch)}
-                  >
-                    <CardContent className="pt-4">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <h3 className="font-semibold">{branch.name}</h3>
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <MapPin className="w-4 h-4" />
-                            {branch.address}
-                          </div>
-                        </div>
-                        <Badge variant="outline">{branch.distance}</Badge>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-              <div className="flex gap-2 mt-6">
-                <Button variant="outline" onClick={goToPrevStep}>
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Back
-                </Button>
-                <Button onClick={goToNextStep} disabled={!selectedBranch}>
-                  Next: Choose Date
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Date Selection */}
-        {step === "date" && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-2xl">Select Date</CardTitle>
-              <CardDescription>Choose your preferred appointment date</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex justify-center">
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={setSelectedDate}
-                  disabled={(date) => date < new Date() || date.getDay() === 0} // Disable past dates and Sundays
-                  className="rounded-md border"
-                />
-              </div>
-              <div className="flex gap-2 mt-6">
-                <Button variant="outline" onClick={goToPrevStep}>
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Back
-                </Button>
-                <Button onClick={goToNextStep} disabled={!selectedDate}>
-                  Next: Choose Therapist
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Therapist Selection */}
-        {step === "therapist" && selectedDate && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-2xl">Choose Therapist</CardTitle>
-              <CardDescription>Select your preferred therapist for {selectedService?.name}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {loadingTherapists ? (
-                  <div className="text-center py-8">Loading therapists...</div>
-                ) : (
-                  therapists?.map((therapist) => (
-                    <Card
-                      key={therapist.id}
-                      className={cn(
-                        "cursor-pointer hover:shadow-md transition-all",
-                        selectedTherapist?.id === therapist.id && "ring-2 ring-primary"
-                      )}
-                      onClick={() => setSelectedTherapist(therapist)}
-                    >
-                      <CardContent className="pt-4">
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 bg-gradient-to-br from-pink-400 to-purple-400 rounded-full flex items-center justify-center text-white font-semibold">
-                            {therapist.name.split(' ').map((n: string) => n[0]).join('')}
-                          </div>
-                          <div className="flex-1">
-                            <h3 className="font-semibold">{therapist.name}</h3>
-                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                              <span>⭐ {therapist.rating}</span>
-                              <span>{therapist.experience} experience</span>
-                            </div>
-                            <div className="flex gap-1 mt-1">
-                              {therapist.specialties.map((specialty: string) => (
-                                <Badge key={specialty} variant="secondary" className="text-xs">
-                                  {specialty}
-                                </Badge>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
-                )}
-              </div>
-              <div className="flex gap-2 mt-6">
-                <Button variant="outline" onClick={goToPrevStep}>
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Back
-                </Button>
-                <Button onClick={goToNextStep} disabled={!selectedTherapist}>
-                  Next: Choose Time
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Timeslot Selection */}
-        {step === "timeslot" && selectedTherapist && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-2xl">Choose Time</CardTitle>
-              <CardDescription>
-                Available slots for {selectedDate?.toLocaleDateString()} with {selectedTherapist.name}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loadingTimeslots ? (
-                <div className="text-center py-8">Loading available times...</div>
-              ) : (
-                <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
-                  {timeslots?.map((slot) => (
-                    <Button
-                      key={slot}
-                      variant={selectedTimeslot === slot ? "default" : "outline"}
-                      onClick={() => setSelectedTimeslot(slot)}
-                      className="h-12"
-                    >
-                      {slot}
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Additional Notes (Optional)
+                    </label>
+                    <textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Any special requests or notes..."
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 dark:bg-gray-700 dark:text-white"
+                      style={{ 
+                        outlineColor: '#ff0a85'
+                      }}
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = '#ff0a85';
+                        e.currentTarget.style.boxShadow = '0 0 0 2px rgba(255, 10, 133, 0.2)';
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = '';
+                        e.currentTarget.style.boxShadow = '';
+                      }}
+                      rows={3}
+                    />
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <Button type="button" variant="outline" onClick={prevStep}>
+                      <ArrowLeft className="mr-2 h-4 w-4" /> Back
                     </Button>
-                  ))}
-                </div>
-              )}
-              <div className="flex gap-2 mt-6">
-                <Button variant="outline" onClick={goToPrevStep}>
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Back
-                </Button>
-                <Button onClick={goToNextStep} disabled={!selectedTimeslot}>
-                  Next: Confirm
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+                    <Button
+                      type="button"
+                      onClick={nextStep}
+                      disabled={!selectedPaymentMethod}
+                    >
+                      Review Booking <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-        {/* Confirmation */}
-        {step === "confirm" && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-2xl">Confirm Your Booking</CardTitle>
-              <CardDescription>Please review your appointment details</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                  <div className="flex justify-between">
-                    <span className="font-medium">Service:</span>
-                    <span>{selectedService?.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium">Duration:</span>
-                    <span>{selectedService?.duration} minutes</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium">Therapist:</span>
-                    <span>{selectedTherapist?.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium">Location:</span>
-                    <span>{selectedBranch?.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium">Date & Time:</span>
-                    <span>{selectedDate?.toLocaleDateString()} at {selectedTimeslot}</span>
-                  </div>
-                  <div className="border-t pt-3">
-                    <div className="flex justify-between text-lg font-semibold">
-                      <span>Total:</span>
-                      <span>RM {selectedService?.price}</span>
+            {/* Step 7: Confirmation */}
+            {step === "confirm" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-2xl">Confirm Booking</CardTitle>
+                  <CardDescription>Review your appointment details</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    {/* Booking Summary */}
+                    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                        Booking Summary
+                      </h3>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-3">
+                          <div className="flex items-center space-x-2">
+                            <MapPin className="w-4 h-4 text-gray-500" />
+                            <span className="text-sm text-gray-600 dark:text-gray-400">Category:</span>
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                              {selectedCategoryObj?.name}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center space-x-2">
+                            <Star className="w-4 h-4 text-gray-500" />
+                            <span className="text-sm text-gray-600 dark:text-gray-400">Service:</span>
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                              {selectedService?.name}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center space-x-2">
+                            <User className="w-4 h-4 text-gray-500" />
+                            <span className="text-sm text-gray-600 dark:text-gray-400">Therapist:</span>
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                              {selectedTherapist?.name}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-3">
+                          <div className="flex items-center space-x-2">
+                            <CalendarIcon className="w-4 h-4 text-gray-500" />
+                            <span className="text-sm text-gray-600 dark:text-gray-400">Date:</span>
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                              {selectedDate?.toLocaleDateString()}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center space-x-2">
+                            <Clock className="w-4 h-4 text-gray-500" />
+                            <span className="text-sm text-gray-600 dark:text-gray-400">Time:</span>
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                              {selectedTimeslot}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center space-x-2">
+                            <CreditCard className="w-4 h-4 text-gray-500" />
+                            <span className="text-sm text-gray-600 dark:text-gray-400">Payment:</span>
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                              {selectedPaymentMethod === "cash" ? "Pay at Spa" : "ToyyibPay"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {notes && (
+                        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">Notes:</span>
+                          <p className="text-sm text-gray-900 dark:text-white mt-1">{notes}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Price Summary */}
+                    <div className="bg-pink-50 dark:bg-pink-950 rounded-lg p-6">
+                      <div className="flex justify-between items-center">
+                        <span className="text-lg font-semibold text-gray-900 dark:text-white">
+                          Total Amount:
+                        </span>
+                        <span className="text-2xl font-bold dark:text-pink-400" style={{ color: '#ff0a85' }}>
+                          RM{selectedService?.price}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                        Duration: {selectedService?.duration} minutes
+                      </p>
                     </div>
                   </div>
-                </div>
-                
-                <div className="space-y-3">
-                  <Button 
-                    size="lg" 
-                    className="w-full" 
-                    onClick={handlePaymentSubmit}
-                    loading={isProcessingPayment}
-                  >
-                    <CreditCard className="w-5 h-5 mr-2" />
-                    Proceed to Payment
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    className="w-full" 
-                    onClick={goToPrevStep}
-                    disabled={isProcessingPayment}
-                  >
-                    <ArrowLeft className="w-4 h-4 mr-2" />
-                    Back to Edit
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+                  
+                  <div className="flex justify-between mt-6">
+                    <Button type="button" variant="outline" onClick={prevStep}>
+                      <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={handlePaymentSubmit}
+                      disabled={isProcessingPayment}
+                      className="text-white"
+                      style={{ backgroundColor: '#ff0a85' }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#d10870'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ff0a85'}
+                    >
+                      {isProcessingPayment ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="mr-2 h-4 w-4" />
+                          Confirm Booking
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </form>
         </Form>
+
+        {/* Login Modal */}
+        <LoginModal 
+          open={showLoginModal} 
+          onOpenChange={setShowLoginModal}
+          onLoginSuccess={() => {
+            // Re-check authentication after successful login
+            checkAuth();
+          }}
+        />
       </div>
     </div>
   );

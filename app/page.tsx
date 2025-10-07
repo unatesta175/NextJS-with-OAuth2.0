@@ -21,8 +21,23 @@ import {
   Award,
   Heart
 } from "lucide-react";
-import { categoriesApi, type Category } from "@/features/categories/api";
+import api from "@lib/axios";
 import { getAssetUrl } from "@lib/config";
+
+// Category interface
+interface Category {
+  id: number;
+  name: string;
+  description: string;
+  image: string | null;
+  is_active: boolean;
+  tags?: Array<{
+    id: number;
+    name: string;
+    is_active: boolean;
+  }>;
+  services_count?: number;
+}
 
 // Mock data for the spa
 const heroImages = [
@@ -191,7 +206,11 @@ export default function HomePage() {
       try {
         setCategoriesLoading(true);
         setCategoriesError(null);
-        const data = await categoriesApi.getAll();
+        
+        // Fetch categories using the configured api instance
+        const response = await api.get('/service-categories');
+        
+        const data = response.data.data;
         setCategories(data);
         // Set initial position for infinite scroll (start after the duplicate set)
         if (data.length > 5) {

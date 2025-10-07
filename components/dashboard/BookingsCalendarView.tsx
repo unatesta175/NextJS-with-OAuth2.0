@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import api from '@lib/axios'
 import { Button } from '@components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@components/ui/avatar'
 import { Badge } from '@components/ui/badge'
@@ -29,128 +30,163 @@ import {
   Edit,
   X,
   Check,
-  Play
+  Play,
+  RefreshCw,
+  Clock,
+  Mail,
+  Phone
 } from 'lucide-react'
 import { DatePicker } from '@components/ui/date-picker'
+import { showSuccessToast, showErrorToast } from '@lib/toast'
 
 interface Staff {
-  id: string
+  id: number
   name: string
+  email: string
   avatar?: string
+  phone?: string
   color: string
 }
 
 interface CalendarBooking {
-  id: string
-  customer: {
-    name: string
-    phone: string
-    email: string
-    avatar?: string
-  }
-  service: string
-  duration: number
-  amount: number
-  startTime: string
-  endTime: string
-  status: 'pending' | 'confirmed' | 'in-progress' | 'completed' | 'cancelled'
-  staffId: string
+  id: number
+  user_id: number
+  service_id: number
+  therapist_id: number
+  appointment_date: string
+  appointment_time: string
+  status: 'pending' | 'confirmed' | 'checked_in' | 'checked_out' | 'completed' | 'cancelled' | 'no_show'
   notes?: string
-  paymentStatus: 'pending' | 'paid' | 'refunded'
+  total_amount: number
+  created_at: string
+  updated_at: string
+  service: {
+    id: number
+    name: string
+    duration: number
+    price: number
+  }
+  therapist: {
+    id: number
+    name: string
+    email: string
+    phone?: string
+  }
+  client: {
+    id: number
+    name: string
+    email: string
+    phone?: string
+  }
+  payment?: {
+    id: number
+    amount: number
+    status: 'unpaid' | 'pending' | 'paid' | 'failed' | 'refunded'
+    payment_method: 'cash' | 'toyyibpay'
+  }
 }
 
-// Sample staff data
-const staffData: Staff[] = [
-  { id: 'staff1', name: 'Maya Chen', color: '#ff0a85' },
-  { id: 'staff2', name: 'Lisa Wong', color: '#8b5cf6' },
-  { id: 'staff3', name: 'Amy Tan', color: '#06d6a0' },
-  { id: 'staff4', name: 'Sarah Lee', color: '#f59e0b' },
-]
+// Color palette for therapists
+const therapistColors = ['#ff0a85', '#8b5cf6', '#06d6a0', '#f59e0b', '#3b82f6', '#ec4899', '#10b981', '#f97316']
 
-// Sample bookings data
-const calendarBookings: CalendarBooking[] = [
-  {
-    id: 'BK001',
-    customer: {
-      name: 'Sarah Johnson',
-      phone: '+60123456789',
-      email: 'sarah@email.com'
-    },
-    service: 'Facial Treatment',
-    duration: 90,
-    amount: 150,
-    startTime: '10:00',
-    endTime: '11:30',
-    status: 'confirmed',
-    staffId: 'staff1',
-    notes: 'First time customer, sensitive skin',
-    paymentStatus: 'paid'
-  },
-  {
-    id: 'BK002',
-    customer: {
-      name: 'Maria Lim',
-      phone: '+60123456790',
-      email: 'maria@email.com'
-    },
-    service: 'Body Massage',
-    duration: 120,
-    amount: 200,
-    startTime: '14:00',
-    endTime: '16:00',
-    status: 'in-progress',
-    staffId: 'staff2',
-    paymentStatus: 'paid'
-  },
-  {
-    id: 'BK003',
-    customer: {
-      name: 'John Doe',
-      phone: '+60123456791',
-      email: 'john@email.com'
-    },
-    service: 'Hair Care',
-    duration: 60,
-    amount: 80,
-    startTime: '11:30',
-    endTime: '12:30',
-    status: 'pending',
-    staffId: 'staff3',
-    paymentStatus: 'pending'
-  },
-  {
-    id: 'BK004',
-    customer: {
-      name: 'Lisa Chen',
-      phone: '+60123456792',
-      email: 'lisa@email.com'
-    },
-    service: 'Nail Care',
-    duration: 75,
-    amount: 120,
-    startTime: '15:00',
-    endTime: '16:15',
-    status: 'confirmed',
-    staffId: 'staff1',
-    paymentStatus: 'paid'
+// Helper function to format time from datetime string to AM/PM format
+const formatTime = (timeString: string): string => {
+  if (!timeString) return ''
+  let timeOnly = timeString
+  if (timeString.includes('T')) {
+    timeOnly = timeString.split('T')[1].split('.')[0]
   }
-]
+  const [hours, minutes] = timeOnly.split(':').map(Number)
+  const period = hours >= 12 ? 'PM' : 'AM'
+  const displayHours = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours)
+  return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`
+}
+
+// Helper function to calculate end time in AM/PM format
+const calculateEndTime = (startTime: string, duration: number): string => {
+  // Remove AM/PM if present and get just the time
+  const timeOnly = startTime.replace(/ AM| PM/g, '')
+  const [hours, minutes] = timeOnly.split(':').map(Number)
+  
+  // Convert to 24-hour for calculation if it was in 12-hour format
+  let hour24 = hours
+  if (startTime.includes('PM') && hours !== 12) {
+    hour24 = hours + 12
+  } else if (startTime.includes('AM') && hours === 12) {
+    hour24 = 0
+  }
+  
+  const totalMinutes = hour24 * 60 + minutes + duration
+  const endHours = Math.floor(totalMinutes / 60) % 24
+  const endMinutes = totalMinutes % 60
+  
+  const period = endHours >= 12 ? 'PM' : 'AM'
+  const displayHours = endHours > 12 ? endHours - 12 : (endHours === 0 ? 12 : endHours)
+  return `${displayHours}:${endMinutes.toString().padStart(2, '0')} ${period}`
+}
+
+// Helper function to format date for API (YYYY-MM-DD)
+const formatDateForAPI = (date: Date): string => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 // Generate time slots from 8 AM to 8 PM in 30-minute intervals
 const timeSlots: string[] = []
 for (let hour = 8; hour <= 20; hour++) {
   for (let minute = 0; minute < 60; minute += 30) {
-    const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
+    const period = hour >= 12 ? 'PM' : 'AM'
+    const displayHour = hour === 0 ? 12 : (hour > 12 ? hour - 12 : hour)
+    const time = `${displayHour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')} ${period}`
     timeSlots.push(time)
   }
 }
 
 const statusConfig = {
-  pending: { label: 'Pending', color: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
-  confirmed: { label: 'Confirmed', color: 'bg-blue-100 text-blue-800 border-blue-200' },
-  'in-progress': { label: 'In Progress', color: 'bg-purple-100 text-purple-800 border-purple-200' },
-  completed: { label: 'Completed', color: 'bg-green-100 text-green-800 border-green-200' },
-  cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800 border-red-200' }
+  pending: { 
+    label: 'Pending', 
+    color: '#e5a900',
+    bgColor: 'rgba(229, 169, 0, 0.1)',
+    badgeClass: 'text-[#e5a900] border-[#e5a900]'
+  },
+  confirmed: { 
+    label: 'Confirmed', 
+    color: '#6E6EEF',
+    bgColor: 'rgba(110, 110, 239, 0.1)',
+    badgeClass: 'text-[#6E6EEF] border-[#6E6EEF]'
+  },
+  checked_in: { 
+    label: 'Check In', 
+    color: '#D68AF1',
+    bgColor: 'rgba(214, 138, 241, 0.1)',
+    badgeClass: 'text-[#D68AF1] border-[#D68AF1]'
+  },
+  checked_out: { 
+    label: 'Checkout', 
+    color: '#E58282',
+    bgColor: 'rgba(229, 130, 130, 0.1)',
+    badgeClass: 'text-[#E58282] border-[#E58282]'
+  },
+  completed: { 
+    label: 'Completed', 
+    color: '#3ABA61',
+    bgColor: 'rgba(58, 186, 97, 0.1)',
+    badgeClass: 'text-[#3ABA61] border-[#3ABA61]'
+  },
+  cancelled: { 
+    label: 'Cancelled', 
+    color: '#ef4444',
+    bgColor: 'rgba(239, 68, 68, 0.1)',
+    badgeClass: 'text-red-600 border-red-600'
+  },
+  no_show: { 
+    label: 'No Show', 
+    color: '#6b7280',
+    bgColor: 'rgba(107, 114, 128, 0.1)',
+    badgeClass: 'text-gray-600 border-gray-600'
+  }
 }
 
 export function BookingsCalendarView() {
@@ -158,23 +194,105 @@ export function BookingsCalendarView() {
   const [selectedStaff, setSelectedStaff] = useState<string>('all')
   const [selectedBooking, setSelectedBooking] = useState<CalendarBooking | null>(null)
   const [isDetailsOpen, setIsDetailsOpen] = useState(false)
+  const [sheetView, setSheetView] = useState<'details' | 'payment' | 'completed'>('details')
+  const [isUpdating, setIsUpdating] = useState(false)
+  
+  // Data states
+  const [staffData, setStaffData] = useState<Staff[]>([])
+  const [calendarBookings, setCalendarBookings] = useState<CalendarBooking[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  
+  // Ref for scroll container
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null)
+
+  // Fetch therapists
+  useEffect(() => {
+    const fetchTherapists = async () => {
+      try {
+        const response = await api.get('/admin/users?role=therapist')
+        const therapists = response.data.data || response.data
+        const therapistsWithColors = therapists.map((therapist: any, index: number) => ({
+          id: therapist.id,
+          name: therapist.name,
+          email: therapist.email,
+          phone: therapist.phone,
+          color: therapistColors[index % therapistColors.length]
+        }))
+        setStaffData(therapistsWithColors)
+      } catch (error) {
+        console.error('Failed to fetch therapists:', error)
+        setStaffData([])
+      }
+    }
+    
+    fetchTherapists()
+  }, [])
+
+  // Fetch bookings for selected date
+  useEffect(() => {
+    const fetchBookings = async () => {
+      setIsLoading(true)
+      try {
+        const response = await api.get('/admin/bookings')
+        const allBookings = response.data.data || []
+        
+        // Filter bookings for selected date
+        const dateStr = formatDateForAPI(selectedDate)
+        const filtered = allBookings.filter((booking: CalendarBooking) => {
+          const bookingDate = booking.appointment_date.split('T')[0]
+          return bookingDate === dateStr
+        })
+        
+        setCalendarBookings(filtered)
+      } catch (error) {
+        console.error('Failed to fetch bookings:', error)
+        setCalendarBookings([])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    
+    if (staffData.length > 0) {
+      fetchBookings()
+    }
+  }, [selectedDate, staffData.length])
+
+  // No auto-scroll needed since 8 AM is at the top
 
   // Filter staff based on selection
-  const displayStaff = selectedStaff === 'all' ? staffData : staffData.filter(s => s.id === selectedStaff)
+  const displayStaff = selectedStaff === 'all' 
+    ? staffData 
+    : staffData.filter(s => s.id.toString() === selectedStaff)
 
   // Get bookings for selected date and staff
   const filteredBookings = calendarBookings.filter(booking => {
-    if (selectedStaff !== 'all' && booking.staffId !== selectedStaff) {
+    if (selectedStaff !== 'all' && booking.therapist_id.toString() !== selectedStaff) {
       return false
     }
-    return true // In real app, would filter by selectedDate
+    return true
   })
 
   const getBookingPosition = (startTime: string, duration: number) => {
-    const [hours, minutes] = startTime.split(':').map(Number)
-    const startMinutes = (hours - 8) * 60 + minutes
-    const topPercentage = (startMinutes / (12 * 60)) * 100 // 12 hours from 8 AM to 8 PM
-    const heightPercentage = (duration / (12 * 60)) * 100
+    // Remove AM/PM and parse time
+    const timeOnly = startTime.replace(/ AM| PM/g, '')
+    const [hours, minutes] = timeOnly.split(':').map(Number)
+    
+    // Convert to 24-hour format if needed
+    let hour24 = hours
+    if (startTime.includes('PM') && hours !== 12) {
+      hour24 = hours + 12
+    } else if (startTime.includes('AM') && hours === 12) {
+      hour24 = 0
+    }
+    
+    // Calculate from 8 AM start (8 AM = 480 minutes from midnight)
+    const startMinutes = hour24 * 60 + minutes
+    const calendarStartMinutes = 8 * 60 // 8 AM in minutes
+    const calendarTotalMinutes = 12 * 60 + 30 // 8 AM to 8:30 PM (12.5 hours)
+    const minutesFromStart = startMinutes - calendarStartMinutes
+    
+    const topPercentage = (minutesFromStart / calendarTotalMinutes) * 100
+    const heightPercentage = (duration / calendarTotalMinutes) * 100
     
     return {
       top: `${topPercentage}%`,
@@ -196,15 +314,92 @@ export function BookingsCalendarView() {
 
   const handleBookingClick = (booking: CalendarBooking) => {
     setSelectedBooking(booking)
+    setSheetView('details')
     setIsDetailsOpen(true)
   }
 
-  const handleStatusChange = (newStatus: CalendarBooking['status']) => {
-    if (selectedBooking) {
-      // TODO: Update booking status
-      console.log('Update booking status:', selectedBooking.id, newStatus)
-      setSelectedBooking({...selectedBooking, status: newStatus})
+  const handleStatusChange = async (newStatus: CalendarBooking['status']) => {
+    if (!selectedBooking) return
+    
+    setIsUpdating(true)
+    try {
+      const response = await api.put(`/admin/bookings/${selectedBooking.id}/status`, {
+        status: newStatus
+      })
+      
+      if (response.data.success) {
+        // Update local state
+        const updatedBooking = response.data.data
+        setSelectedBooking(updatedBooking)
+        
+        // Update in the calendar bookings list
+        setCalendarBookings(prev => 
+          prev.map(b => b.id === updatedBooking.id ? updatedBooking : b)
+        )
+        
+        showSuccessToast(`Booking status changed to ${statusConfig[newStatus].label}`)
+      }
+    } catch (error: any) {
+      console.error('Failed to update status:', error)
+      showErrorToast(error.response?.data?.message || 'Failed to update booking status')
+    } finally {
+      setIsUpdating(false)
     }
+  }
+
+  const handleConfirmBooking = () => {
+    handleStatusChange('confirmed')
+  }
+
+  const handleCheckIn = () => {
+    handleStatusChange('checked_in')
+  }
+
+  const handleCheckout = () => {
+    handleStatusChange('checked_out')
+  }
+
+  const handleGoToPayment = () => {
+    setSheetView('payment')
+  }
+
+  const handleCompleteBooking = () => {
+    setSheetView('completed')
+  }
+
+  const handlePayNow = async () => {
+    if (!selectedBooking?.payment) return
+    
+    setIsUpdating(true)
+    try {
+      // Update payment status to paid for cash payments
+      const response = await api.put(`/admin/bookings/${selectedBooking.id}/status`, {
+        status: 'completed'
+      })
+      
+      if (response.data.success) {
+        const updatedBooking = response.data.data
+        setSelectedBooking(updatedBooking)
+        
+        setCalendarBookings(prev => 
+          prev.map(b => b.id === updatedBooking.id ? updatedBooking : b)
+        )
+        
+        setSheetView('completed')
+        
+        showSuccessToast('Booking completed successfully')
+      }
+    } catch (error: any) {
+      console.error('Failed to process payment:', error)
+      showErrorToast(error.response?.data?.message || 'Failed to process payment')
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })
   }
 
   return (
@@ -243,9 +438,9 @@ export function BookingsCalendarView() {
               <SelectValue placeholder="Filter by staff" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Staff</SelectItem>
+              <SelectItem value="all">All Therapists</SelectItem>
               {staffData.map((staff) => (
-                <SelectItem key={staff.id} value={staff.id}>
+                <SelectItem key={staff.id} value={staff.id.toString()}>
                   {staff.name}
                 </SelectItem>
               ))}
@@ -256,13 +451,45 @@ export function BookingsCalendarView() {
 
       {/* Calendar Grid */}
       <div className="border rounded-lg bg-white overflow-hidden">
-        <div className="grid grid-cols-[80px_1fr] h-[600px]">
-          {/* Time Column */}
-          <div className="border-r bg-gray-50">
-            <div className="h-12 border-b flex items-center justify-center text-xs font-medium text-gray-500">
-              Time
+        {/* Fixed Headers - Reserve space for scrollbar */}
+        <div 
+          className="grid border-b bg-gray-50"
+          style={{ 
+            gridTemplateColumns: `80px repeat(${displayStaff.length}, 1fr)`,
+            paddingRight: '17px' // Reserve space for scrollbar (Windows default: 17px)
+          }}
+        >
+          {/* Time Header */}
+          <div className="h-12 border-r flex items-center justify-center text-xs font-medium text-gray-500">
+            Time
+          </div>
+          
+          {/* Staff Headers */}
+          {displayStaff.map((staff) => (
+            <div
+              key={staff.id}
+              className="h-12 border-r last:border-r-0 flex items-center justify-center p-2"
+            >
+              <div className="flex items-center gap-2">
+                <Avatar className="h-6 w-6">
+                  <AvatarFallback className="text-xs">
+                    {staff.name.split(' ').map(n => n[0]).join('')}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-sm font-medium truncate">{staff.name}</span>
+              </div>
             </div>
-            <div className="relative">
+          ))}
+        </div>
+
+        {/* Scrollable Content */}
+        <div ref={scrollContainerRef} className="h-[700px] overflow-y-scroll scroll-smooth">
+          <div 
+            className="grid relative"
+            style={{ gridTemplateColumns: `80px repeat(${displayStaff.length}, 1fr)` }}
+          >
+            {/* Time Column */}
+            <div className="border-r bg-gray-50">
               {timeSlots.filter((_, i) => i % 2 === 0).map((time) => (
                 <div
                   key={time}
@@ -272,234 +499,372 @@ export function BookingsCalendarView() {
                 </div>
               ))}
             </div>
-          </div>
 
-          {/* Staff Columns */}
-          <div className={`grid grid-cols-${Math.min(displayStaff.length, 4)} relative`}>
-            {/* Staff Headers */}
+            {/* Staff Columns - Each as direct grid item */}
             {displayStaff.map((staff) => (
-              <div
+              <div 
                 key={staff.id}
-                className="h-12 border-b border-r last:border-r-0 flex items-center justify-center p-2"
+                className="relative border-r last:border-r-0"
               >
-                <div className="flex items-center gap-2">
-                  <Avatar className="h-6 w-6">
-                    <AvatarImage src={staff.avatar} />
-                    <AvatarFallback className="text-xs">
-                      {staff.name.split(' ').map(n => n[0]).join('')}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="text-sm font-medium truncate">{staff.name}</span>
-                </div>
-              </div>
-            ))}
+                {/* Time Grid Lines */}
+                {timeSlots.filter((_, i) => i % 2 === 0).map((time) => (
+                  <div
+                    key={time}
+                    className="h-16 border-b"
+                  />
+                ))}
 
-            {/* Time Grid Background */}
-            <div className="absolute inset-0 top-12">
-              {timeSlots.filter((_, i) => i % 2 === 0).map((time) => (
-                <div
-                  key={time}
-                  className="h-16 border-b grid"
-                  style={{ gridTemplateColumns: `repeat(${displayStaff.length}, 1fr)` }}
-                >
-                  {displayStaff.map((_, staffIndex) => (
-                    <div
-                      key={staffIndex}
-                      className="border-r last:border-r-0"
-                    />
-                  ))}
-                </div>
-              ))}
-            </div>
-
-            {/* Booking Blocks */}
-            {displayStaff.map((staff, staffIndex) => (
-              <div key={staff.id} className="absolute inset-0 top-12">
-                <div
-                  className="relative h-full"
-                  style={{
-                    left: `${(staffIndex / displayStaff.length) * 100}%`,
-                    width: `${100 / displayStaff.length}%`
-                  }}
-                >
-                  {filteredBookings
-                    .filter(booking => booking.staffId === staff.id)
-                    .map((booking) => {
-                      const position = getBookingPosition(booking.startTime, booking.duration)
-                      const statusClass = statusConfig[booking.status]
-                      
-                      return (
-                        <div
-                          key={booking.id}
-                          className={`absolute left-1 right-1 p-2 rounded-md border cursor-pointer hover:shadow-md transition-shadow ${statusClass.color}`}
-                          style={position}
-                          onClick={() => handleBookingClick(booking)}
-                        >
-                          <div className="text-xs font-medium truncate">
-                            {booking.customer.name}
-                          </div>
-                          <div className="text-xs text-gray-600 truncate">
-                            {booking.service}
-                          </div>
-                          <div className="text-xs mt-1">
-                            {booking.startTime} - {booking.endTime}
-                          </div>
-                          <div className="text-xs font-medium">
-                            RM {booking.amount}
-                          </div>
+                {/* Booking Blocks for this staff */}
+                {!isLoading && filteredBookings
+                  .filter(booking => booking.therapist_id === staff.id)
+                  .map((booking) => {
+                    const startTime = formatTime(booking.appointment_time)
+                    const endTime = calculateEndTime(startTime, booking.service.duration)
+                    const position = getBookingPosition(startTime, booking.service.duration)
+                    const statusStyle = statusConfig[booking.status]
+                    
+                    return (
+                      <div
+                        key={booking.id}
+                        className="absolute left-1 right-1 p-2 rounded-md border cursor-pointer hover:shadow-md transition-shadow"
+                        style={{
+                          ...position,
+                          backgroundColor: statusStyle.bgColor,
+                          borderColor: statusStyle.color,
+                          borderWidth: '2px'
+                        }}
+                        onClick={() => handleBookingClick(booking)}
+                      >
+                        <div className="text-xs font-medium truncate">
+                          {booking.client.name}
                         </div>
-                      )
-                    })}
-                </div>
+                        <div className="text-xs text-gray-600 truncate">
+                          {booking.service.name}
+                        </div>
+                        <div className="text-xs mt-1">
+                          {startTime} - {endTime}
+                        </div>
+                        <div className="text-xs font-medium">
+                          RM {Number(booking.total_amount).toFixed(2)}
+                        </div>
+                      </div>
+                    )
+                  })}
               </div>
             ))}
+
+            {/* Loading overlay */}
+            {isLoading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-white/50" style={{ gridColumn: '1 / -1' }}>
+                <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       {/* Booking Details Sheet */}
       <Sheet open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-        <SheetContent className="w-[400px] sm:w-[540px]">
+        <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
           {selectedBooking && (
             <>
-              <SheetHeader>
-                <SheetTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5" />
-                  Booking Details
-                </SheetTitle>
-                <SheetDescription>
-                  Booking ID: {selectedBooking.id}
-                </SheetDescription>
-              </SheetHeader>
+              {sheetView === 'details' && (
+                <>
+                  <SheetHeader>
+                    <SheetTitle className="text-xl font-bold">
+                      Booking #{selectedBooking.id}
+                    </SheetTitle>
+                    <div className="flex items-center gap-2 mt-2">
+                      <Badge 
+                        variant="outline" 
+                        className={`${statusConfig[selectedBooking.status].badgeClass} font-medium`}
+                        style={{ borderWidth: '1.5px' }}
+                      >
+                        {statusConfig[selectedBooking.status].label}
+                      </Badge>
+                      {selectedBooking.status === 'pending' && (
+                        <Button 
+                          size="sm" 
+                          onClick={handleConfirmBooking}
+                          disabled={isUpdating}
+                          className="ml-auto bg-[#6E6EEF] hover:bg-[#6E6EEF]/90"
+                        >
+                          {isUpdating ? 'Confirming...' : 'Confirm'}
+                        </Button>
+                      )}
+                      {selectedBooking.status === 'confirmed' && (
+                        <Button 
+                          size="sm" 
+                          onClick={handleCheckIn}
+                          disabled={isUpdating}
+                          className="ml-auto bg-[#D68AF1] hover:bg-[#D68AF1]/90"
+                        >
+                          {isUpdating ? 'Processing...' : 'Check In'}
+                        </Button>
+                      )}
+                      {selectedBooking.status === 'checked_in' && (
+                        <Button 
+                          size="sm" 
+                          onClick={handleCheckout}
+                          disabled={isUpdating}
+                          className="ml-auto bg-[#E58282] hover:bg-[#E58282]/90"
+                        >
+                          {isUpdating ? 'Processing...' : 'Checkout'}
+                        </Button>
+                      )}
+                    </div>
+                  </SheetHeader>
 
-              <div className="mt-6 space-y-6">
-                {/* Customer Information */}
-                <div className="space-y-3">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <User className="h-4 w-4" />
-                    Customer Information
-                  </h3>
-                  <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={selectedBooking.customer.avatar} />
-                        <AvatarFallback>
-                          {selectedBooking.customer.name.split(' ').map(n => n[0]).join('')}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <div className="font-medium">{selectedBooking.customer.name}</div>
-                        <div className="text-sm text-gray-500">{selectedBooking.customer.email}</div>
-                      </div>
+                  <div className="mt-6 space-y-6">
+                    {/* Date */}
+                    <div className="bg-gray-50 rounded-lg p-3 flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-gray-600" />
+                      <span className="font-medium">{formatDate(selectedBooking.appointment_date)}</span>
                     </div>
-                    <div className="text-sm text-gray-600">
-                      Phone: {selectedBooking.customer.phone}
-                    </div>
-                  </div>
-                </div>
 
-                {/* Service Details */}
-                <div className="space-y-3">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <MapPin className="h-4 w-4" />
-                    Service Details
-                  </h3>
-                  <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Service:</span>
-                      <span className="font-medium">{selectedBooking.service}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Duration:</span>
-                      <span className="font-medium">{selectedBooking.duration} minutes</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Time:</span>
-                      <span className="font-medium">{selectedBooking.startTime} - {selectedBooking.endTime}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Staff:</span>
+                    {/* Time */}
+                    <div className="bg-gray-50 rounded-lg p-3 flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-gray-600" />
                       <span className="font-medium">
-                        {staffData.find(s => s.id === selectedBooking.staffId)?.name}
+                        {formatTime(selectedBooking.appointment_time)}
                       </span>
                     </div>
-                  </div>
-                </div>
 
-                {/* Payment Information */}
-                <div className="space-y-3">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <CreditCard className="h-4 w-4" />
-                    Payment Information
-                  </h3>
-                  <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Amount:</span>
-                      <span className="font-medium text-lg">RM {selectedBooking.amount.toFixed(2)}</span>
+                    {/* Client Information */}
+                    <div className="space-y-3">
+                      <h3 className="font-semibold text-gray-900">Client Information</h3>
+                      <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-12 w-12">
+                            <AvatarFallback className="bg-[#ff0a85] text-white">
+                              {selectedBooking.client.name.split(' ').map(n => n[0]).join('')}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="font-medium text-gray-900">{selectedBooking.client.name}</div>
+                          </div>
+                        </div>
+                        {selectedBooking.client.phone && (
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Phone className="h-4 w-4" />
+                            <span>{selectedBooking.client.phone}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <Mail className="h-4 w-4" />
+                          <span>{selectedBooking.client.email}</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Payment Status:</span>
-                      <Badge variant={selectedBooking.paymentStatus === 'paid' ? 'default' : 'secondary'}>
-                        {selectedBooking.paymentStatus}
+
+                    {/* Service Details */}
+                    <div className="space-y-3">
+                      <h3 className="font-semibold text-gray-900">Service Details</h3>
+                      <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">Service</span>
+                          <span className="font-medium text-gray-900">{selectedBooking.service.name}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">Duration</span>
+                          <span className="font-medium text-gray-900">{selectedBooking.service.duration} minutes</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Notes */}
+                    {selectedBooking.notes && (
+                      <div className="space-y-3">
+                        <h3 className="font-semibold text-gray-900">Notes</h3>
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <p className="text-sm text-gray-600">{selectedBooking.notes}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Payment Information */}
+                    <div className="space-y-3">
+                      <h3 className="font-semibold text-gray-900">Payment</h3>
+                      <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">Payment Method</span>
+                          <span className="font-medium text-gray-900 capitalize">
+                            {selectedBooking.payment?.payment_method || 'N/A'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">Subtotal</span>
+                          <span className="font-medium text-lg text-gray-900">
+                            RM {Number(selectedBooking.total_amount).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Checkout Actions */}
+                    {selectedBooking.status === 'checked_out' && (
+                      <div className="pt-4 border-t">
+                        {selectedBooking.payment?.payment_method === 'cash' ? (
+                          <Button 
+                            className="w-full bg-[#3ABA61] hover:bg-[#3ABA61]/90"
+                            onClick={handleGoToPayment}
+                          >
+                            Go to Payment
+                          </Button>
+                        ) : (
+                          <Button 
+                            className="w-full bg-[#3ABA61] hover:bg-[#3ABA61]/90"
+                            onClick={handleCompleteBooking}
+                          >
+                            Complete Booking
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {sheetView === 'payment' && (
+                <>
+                  <SheetHeader>
+                    <SheetTitle className="text-xl font-bold">
+                      Payment - Booking #{selectedBooking.id}
+                    </SheetTitle>
+                  </SheetHeader>
+
+                  <div className="mt-6 space-y-6">
+                    <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Booking ID</span>
+                        <span className="font-medium text-gray-900">#{selectedBooking.id}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Service</span>
+                        <span className="font-medium text-gray-900">{selectedBooking.service.name}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Amount</span>
+                        <span className="font-medium text-gray-900">{selectedBooking.service.duration} min</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-3 border-t">
+                        <span className="text-sm text-gray-600">Payment Method</span>
+                        <span className="font-medium text-gray-900 uppercase">CASH</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-gray-900">Total</span>
+                        <span className="font-bold text-xl text-gray-900">
+                          RM {Number(selectedBooking.total_amount).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <Button 
+                      className="w-full bg-[#3ABA61] hover:bg-[#3ABA61]/90 text-white"
+                      onClick={handlePayNow}
+                      disabled={isUpdating}
+                    >
+                      {isUpdating ? 'Processing...' : 'Pay Now'}
+                    </Button>
+                  </div>
+                </>
+              )}
+
+              {sheetView === 'completed' && (
+                <>
+                  <SheetHeader>
+                    <SheetTitle className="text-xl font-bold flex items-center gap-2">
+                      Booking #{selectedBooking.id}
+                      <Badge 
+                        variant="outline" 
+                        className="text-[#3ABA61] border-[#3ABA61] font-medium"
+                        style={{ borderWidth: '1.5px' }}
+                      >
+                        Completed
                       </Badge>
+                    </SheetTitle>
+                  </SheetHeader>
+
+                  <div className="mt-6 space-y-6">
+                    {/* Client Information */}
+                    <div className="space-y-3">
+                      <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-12 w-12">
+                            <AvatarFallback className="bg-[#ff0a85] text-white">
+                              {selectedBooking.client.name.split(' ').map(n => n[0]).join('')}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="font-medium text-gray-900">{selectedBooking.client.name}</div>
+                          </div>
+                        </div>
+                        {selectedBooking.client.phone && (
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Phone className="h-4 w-4" />
+                            <span>{selectedBooking.client.phone}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <Mail className="h-4 w-4" />
+                          <span>{selectedBooking.client.email}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Service & Therapist */}
+                    <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Service</span>
+                        <span className="font-medium text-gray-900">{selectedBooking.service.name}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Therapist</span>
+                        <span className="font-medium text-gray-900">{selectedBooking.therapist.name}</span>
+                      </div>
+                    </div>
+
+                    {/* Payment Information */}
+                    <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Total Paid</span>
+                        <span className="font-bold text-lg text-[#3ABA61]">
+                          RM {Number(selectedBooking.total_amount).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Payment Method</span>
+                        <span className="font-medium text-gray-900 uppercase">
+                          {selectedBooking.payment?.payment_method || 'N/A'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Booking Details */}
+                    <div className="space-y-3">
+                      <h3 className="font-semibold text-gray-900">Booking Details</h3>
+                      <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Booked On</span>
+                          <span className="font-medium text-gray-900">{formatDate(selectedBooking.created_at)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Booked By</span>
+                          <span className="font-medium text-gray-900">{selectedBooking.client.name}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Updated On</span>
+                          <span className="font-medium text-gray-900">{formatDate(selectedBooking.updated_at)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Updated By</span>
+                          <span className="font-medium text-gray-900">Salon Admin</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-
-                {/* Status */}
-                <div className="space-y-3">
-                  <h3 className="font-semibold">Current Status</h3>
-                  <Badge className={statusConfig[selectedBooking.status].color}>
-                    {statusConfig[selectedBooking.status].label}
-                  </Badge>
-                </div>
-
-                {/* Notes */}
-                {selectedBooking.notes && (
-                  <div className="space-y-3">
-                    <h3 className="font-semibold flex items-center gap-2">
-                      <FileText className="h-4 w-4" />
-                      Notes
-                    </h3>
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <p className="text-sm">{selectedBooking.notes}</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Quick Actions */}
-                <div className="space-y-3">
-                  <h3 className="font-semibold">Quick Actions</h3>
-                  <div className="flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline" onClick={() => console.log('Edit booking')}>
-                      <Edit className="h-4 w-4 mr-2" />
-                      Edit
-                    </Button>
-                    {selectedBooking.status === 'pending' && (
-                      <Button size="sm" onClick={() => handleStatusChange('confirmed')}>
-                        <Check className="h-4 w-4 mr-2" />
-                        Confirm
-                      </Button>
-                    )}
-                    {selectedBooking.status === 'confirmed' && (
-                      <Button size="sm" onClick={() => handleStatusChange('in-progress')}>
-                        <Play className="h-4 w-4 mr-2" />
-                        Start
-                      </Button>
-                    )}
-                    {selectedBooking.status === 'in-progress' && (
-                      <Button size="sm" onClick={() => handleStatusChange('completed')}>
-                        <Check className="h-4 w-4 mr-2" />
-                        Complete
-                      </Button>
-                    )}
-                    <Button size="sm" variant="destructive" onClick={() => handleStatusChange('cancelled')}>
-                      <X className="h-4 w-4 mr-2" />
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              </div>
+                </>
+              )}
             </>
           )}
         </SheetContent>

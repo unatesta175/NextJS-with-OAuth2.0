@@ -19,6 +19,7 @@ import {
 import { Search, Menu, MapPin, User, Calendar, LogOut } from "lucide-react";
 import { useAppSelector, useAppDispatch } from "@lib/reduxHooks";
 import { logoutUser } from "@/features/auth/authSlice";
+import { getUserImageUrl } from "@lib/image-utils";
 
 const Header = () => {
   const { user, isAuthenticated } = useAppSelector((state) => state.auth);
@@ -118,9 +119,15 @@ const Header = () => {
                     <DropdownMenuTrigger asChild>
                       <Avatar className="w-8 h-8 cursor-pointer hover:ring-2 hover:ring-primary hover:ring-offset-2 transition-all">
                         <AvatarImage 
-                          src={(user as any)?.image || "/placeholder-avatar.svg"} 
+                          src={(() => {
+                            const imageUrl = getUserImageUrl((user as any)?.image);
+                            console.log('🔍 Header Avatar - Original path:', (user as any)?.image);
+                            console.log('🔍 Header Avatar - Generated URL:', imageUrl);
+                            return imageUrl;
+                          })()} 
                           alt={user?.name}
                           onError={(e) => {
+                            console.log('🚨 Header Avatar failed to load, falling back to placeholder');
                             (e.target as HTMLImageElement).src = "/placeholder-avatar.svg";
                           }}
                         />

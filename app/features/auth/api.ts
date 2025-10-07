@@ -59,6 +59,9 @@ export const authApi = {
   },
 
   updateProfile: async (formData: FormData) => {
+    console.log('👤 Calling updateProfile API with URL: /auth/profile');
+    console.log('👤 Method: POST');
+    console.log('👤 Data: FormData with keys:', Array.from(formData.keys()));
     const response = await api.post('/auth/profile', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
@@ -72,6 +75,9 @@ export const authApi = {
     password: string;
     password_confirmation: string;
   }) => {
+    console.log('🔐 Calling changePassword API with URL: /auth/change-password');
+    console.log('🔐 Method: PUT');
+    console.log('🔐 Data:', { ...passwordData, current_password: '[HIDDEN]', password: '[HIDDEN]', password_confirmation: '[HIDDEN]' });
     const response = await api.put('/auth/change-password', passwordData);
     return response.data;
   }
