@@ -9,6 +9,8 @@ import { useEffect } from "react";
 import { Input } from "@components/ui/input";
 import { Button } from "@components/ui/button";
 import GoogleLoginButton from "@components/ui/google-login-button";
+import Link from "next/link";
+import Image from "next/image";
 
 const schema = z.object({
   email: z.string().email("incorrect email format"),
@@ -48,12 +50,26 @@ export default function LoginPage() {
   }, [isAuthenticated, user, router]);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-primary/10 via-purple-50 to-pink-50">
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="w-full max-w-sm bg-white dark:bg-zinc-900 p-8 rounded shadow space-y-6"
+        className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl space-y-6"
       >
-        <h1 className="text-2xl font-bold mb-4">Login</h1>
+        {/* Logo */}
+        <div className="flex justify-center mb-6">
+          <div className="relative h-16 w-40">
+            <Image
+              src="/Logo/big-logo.png"
+              alt="Lunara Spa"
+              fill
+              className="object-contain"
+              priority
+            />
+          </div>
+        </div>
+        
+        <h1 className="text-3xl font-bold text-center text-gray-900 mb-2">Welcome Back</h1>
+        <p className="text-center text-gray-600 mb-6">Sign in to your account to continue</p>
         <div>
           <Input
             type="email"
@@ -78,13 +94,13 @@ export default function LoginPage() {
         </div>
         {/* {errors.root && <p className="text-red-500 text-sm">{errors.root.message}</p>} */}
         <div className="text-right text-sm mb-4">
-          <a href="/auth/forgot-password" className="text-blue-600 hover:text-blue-500 underline">
+          <a href="/auth/forgot-password" className="text-primary hover:text-primary/80 underline font-medium">
             Forgot your password?
           </a>
         </div>
         
-        <Button type="submit" loading={isSubmitting || loading} className="w-full">
-          Login
+        <Button type="submit" loading={isSubmitting || loading} className="w-full bg-primary hover:bg-primary/90 text-white">
+          Sign In
         </Button>
         
         <div className="relative my-6">
@@ -98,8 +114,21 @@ export default function LoginPage() {
 
         <GoogleLoginButton className="mb-4" />
         
-        <div className="text-center text-sm mt-2">
-          Don&apos;t have an account? <a href="/auth/register" className="underline">Register</a>
+        <div className="text-center text-sm mt-4">
+          Don&apos;t have an account? <a href="/auth/register" className="text-primary hover:text-primary/80 underline font-medium">Create Account</a>
+        </div>
+        
+        <div className="text-center text-sm mt-3 pt-4 border-t border-gray-200">
+          <p className="text-gray-600 mb-2">Staff member?</p>
+          <a 
+            href="/dashboard/login" 
+            className="text-primary hover:text-primary/80 underline font-medium inline-flex items-center gap-1"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+            Login to Dashboard
+          </a>
         </div>
       </form>
     </div>

@@ -1,9 +1,0 @@
-<svg width="300" height="200" viewBox="0 0 300 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="300" height="200" fill="#f0fdf4"/>
-<rect x="50" y="60" width="200" height="80" rx="40" fill="#dcfce7"/>
-<circle cx="120" cy="70" r="12" fill="#16a34a"/>
-<circle cx="180" cy="85" r="10" fill="#16a34a"/>
-<circle cx="150" cy="110" r="15" fill="#16a34a"/>
-<path d="M80 130 Q150 120 220 130" stroke="#16a34a" stroke-width="3" fill="none"/>
-<text x="150" y="170" text-anchor="middle" fill="#4a5568" font-family="Arial, sans-serif" font-size="16" font-weight="bold">Swedish Massage</text>
-</svg>

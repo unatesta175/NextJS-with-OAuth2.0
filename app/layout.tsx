@@ -10,8 +10,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Kapas Beauty Spa",
-  description: "Kapas Beauty Spa Booking System",
+  title: "Lunara Spa",
+  description: "Lunara Spa Booking System",
   icons: {
     icon: "/Logo/favicon.png",
     shortcut: "/Logo/favicon.png",

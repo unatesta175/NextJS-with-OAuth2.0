@@ -121,7 +121,7 @@ const servicesData: Service[] = [
 const branchesData: Branch[] = [
   {
     id: 'main',
-    name: 'Kapas Beauty Main Branch',
+    name: 'Lunara Spa Main Branch',
     address: 'Lot 1.23, Level 1, Suria KLCC, Kuala Lumpur City Centre, 50088 Kuala Lumpur',
     phone: '+603-2382-8888',
     email: 'main@kapasbeauty.com',
@@ -145,7 +145,7 @@ const branchesData: Branch[] = [
   },
   {
     id: 'pj',
-    name: 'Kapas Beauty Petaling Jaya',
+    name: 'Lunara Spa Petaling Jaya',
     address: '3-G-1, Jalan PJU 7/3, Mutiara Damansara, 47800 Petaling Jaya, Selangor',
     phone: '+603-7728-9999',
     email: 'pj@kapasbeauty.com',
@@ -169,7 +169,7 @@ const branchesData: Branch[] = [
   },
   {
     id: 'shah-alam',
-    name: 'Kapas Beauty Shah Alam',
+    name: 'Lunara Spa Shah Alam',
     address: 'L2-15, i-City Mall, Persiaran Multimedia, Seksyen 7, 40000 Shah Alam, Selangor',
     phone: '+603-5521-7777',
     email: 'shahalam@kapasbeauty.com',

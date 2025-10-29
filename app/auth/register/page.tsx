@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Button } from "@components/ui/button";
 import { Input } from "@components/ui/input";
+import Image from "next/image";
 
 const schema = z.object({
   name: z.string().min(2, "Name should be at least 2 characters long"),
@@ -54,12 +55,26 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-primary/10 via-purple-50 to-pink-50 py-12">
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="w-full max-w-sm bg-white dark:bg-zinc-900 p-8 rounded shadow space-y-6"
+        className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl space-y-6"
       >
-        <h1 className="text-2xl font-bold mb-4">Register</h1>
+        {/* Logo */}
+        <div className="flex justify-center mb-6">
+          <div className="relative h-16 w-40">
+            <Image
+              src="/Logo/big-logo.png"
+              alt="Lunara Spa"
+              fill
+              className="object-contain"
+              priority
+            />
+          </div>
+        </div>
+        
+        <h1 className="text-3xl font-bold text-center text-gray-900 mb-2">Create Account</h1>
+        <p className="text-center text-gray-600 mb-6">Join Lunara Spa for exclusive wellness experiences</p>
         <div>
           <Input
             type="text"
@@ -104,11 +119,11 @@ export default function RegisterPage() {
             <p className="text-red-500 text-xs mt-1">{errors.confirmPassword.message}</p>
           )}
         </div>
-        <Button type="submit" loading={isSubmitting} className="w-full">
-          Register
+        <Button type="submit" loading={isSubmitting} className="w-full bg-primary hover:bg-primary/90 text-white">
+          Create Account
         </Button>
-        <div className="text-center text-sm mt-2">
-          Already have an account? <a href="/auth/login" className="underline">Login</a>
+        <div className="text-center text-sm mt-4">
+          Already have an account? <a href="/auth/login" className="text-primary hover:text-primary/80 underline font-medium">Sign In</a>
         </div>
       </form>
     </div>

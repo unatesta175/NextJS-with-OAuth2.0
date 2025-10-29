@@ -42,7 +42,7 @@ const Footer = () => {
               <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
                 <span className="text-white font-bold text-sm">K</span>
               </div>
-              <span className="text-xl font-bold">Kapas Beauty Spa</span>
+              <span className="text-xl font-bold">Lunara Spa</span>
             </div>
             <p className="text-gray-400 text-sm leading-relaxed">
               Experience luxury wellness and rejuvenation with our premium spa treatments. 
@@ -61,7 +61,7 @@ const Footer = () => {
               </div>
               <div className="flex items-center space-x-3 text-sm">
                 <Mail className="w-4 h-4 text-primary flex-shrink-0" />
-                <span className="text-gray-400">info@kapasbeautyspa.com</span>
+                <span className="text-gray-400">info@lunaraspa.com</span>
               </div>
               <div className="flex items-center space-x-3 text-sm">
                 <Clock className="w-4 h-4 text-primary flex-shrink-0" />
@@ -146,7 +146,7 @@ const Footer = () => {
         <div className="mt-12 pt-8 border-t border-gray-800">
           <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
             <p className="text-gray-400 text-sm">
-              © 2024 Kapas Beauty Spa. All rights reserved.
+              © 2024 Muhammad Ilyas Bin Amran. All rights reserved.
             </p>
             <div className="flex items-center space-x-6 text-sm text-gray-400">
               <span>Made with ❤️ for wellness</span>
@@ -159,6 +159,16 @@ const Footer = () => {
 };
 
 export default Footer;
+
+
+
+
+
+
+
+
+
+
 
 
 

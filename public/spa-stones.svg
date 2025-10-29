@@ -1,8 +1,0 @@
-<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="200" height="200" fill="#f0f4f8"/>
-<ellipse cx="70" cy="120" rx="25" ry="20" fill="#64748b"/>
-<ellipse cx="130" cy="100" rx="30" ry="25" fill="#475569"/>
-<ellipse cx="100" cy="140" rx="20" ry="15" fill="#64748b"/>
-<ellipse cx="110" cy="80" rx="15" ry="12" fill="#8b5cf6"/>
-<text x="100" y="170" text-anchor="middle" fill="#4a5568" font-family="Arial, sans-serif" font-size="14" font-weight="bold">Spa Stones</text>
-</svg>

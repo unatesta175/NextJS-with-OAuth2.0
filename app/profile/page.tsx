@@ -304,31 +304,14 @@ export default function ProfilePage() {
                 </div>
               )}
 
-              {/* Account Stats */}
-              <div className="pt-6 border-t">
-                <h4 className="text-sm font-semibold text-gray-900 mb-4">Account Statistics</h4>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-primary">5</div>
-                    <div className="text-sm text-gray-600">Total Bookings</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-primary">2</div>
-                    <div className="text-sm text-gray-600">This Month</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-primary">4.8</div>
-                    <div className="text-sm text-gray-600">Avg Rating</div>
-                  </div>
-                </div>
-              </div>
+           
             </CardContent>
           </Card>
 
           {/* Quick Actions */}
-          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="mt-8">
             <Card 
-              className="hover:shadow-md transition-shadow cursor-pointer"
+              className="hover:shadow-md transition-shadow cursor-pointer "
               onClick={() => setShowPasswordModal(true)}
             >
               <CardContent className="p-6 text-center">
@@ -337,16 +320,6 @@ export default function ProfilePage() {
                 </div>
                 <h3 className="font-semibold mb-2">Change Password</h3>
                 <p className="text-sm text-gray-600">Update your account password for security</p>
-              </CardContent>
-            </Card>
-
-            <Card className="hover:shadow-md transition-shadow cursor-pointer">
-              <CardContent className="p-6 text-center">
-                <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Mail className="w-6 h-6 text-primary" />
-                </div>
-                <h3 className="font-semibold mb-2">Preferences</h3>
-                <p className="text-sm text-gray-600">Manage your notification and privacy settings</p>
               </CardContent>
             </Card>
           </div>

@@ -186,11 +186,11 @@ export default function DashboardLoginPage() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-amber-700">Admin:</span>
-                <span className="font-mono text-amber-900">admin@kapasbeauty.com</span>
+                <span className="font-mono text-amber-900">admin@lunaraspa.com</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-amber-700">Therapist:</span>
-                <span className="font-mono text-amber-900">therapist@kapasbeauty.com</span>
+                <span className="font-mono text-amber-900">alicia@lunaraspa.com</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-amber-700">Password:</span>

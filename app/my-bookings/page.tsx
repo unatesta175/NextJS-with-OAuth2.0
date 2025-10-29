@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useAppSelector } from "@lib/reduxHooks";
 import { selectAuth } from "app/features/auth/authSlice";
 import api from "@lib/axios";
@@ -17,11 +18,11 @@ import {
   MapPin, 
   CreditCard, 
   Download,
-  Edit,
   X,
   CheckCircle,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  Eye
 } from "lucide-react";
 import { cn } from "@lib/utils";
 import { showSuccessToast, showErrorToast } from "@lib/toast";
@@ -129,11 +130,11 @@ const formatTime = (timeString: string | null | undefined): string => {
 
 export default function MyBookingsPage() {
   const { isAuthenticated } = useAppSelector(selectAuth);
+  const searchParams = useSearchParams();
+  const router = useRouter();
   
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
-  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   
   // Manual state management instead of React Query
@@ -158,15 +159,34 @@ export default function MyBookingsPage() {
     }
   };
 
+  // Handle payment callback from ToyyibPay
+  useEffect(() => {
+    const paymentStatus = searchParams.get('payment');
+    const message = searchParams.get('message');
+
+    if (paymentStatus && message) {
+      // Show appropriate toast based on payment status
+      if (paymentStatus === 'success') {
+        showSuccessToast(decodeURIComponent(message));
+      } else if (paymentStatus === 'failed' || paymentStatus === 'error') {
+        showErrorToast(decodeURIComponent(message));
+      }
+
+      // Clear query parameters from URL without reloading
+      const url = new URL(window.location.href);
+      url.searchParams.delete('payment');
+      url.searchParams.delete('message');
+      window.history.replaceState({}, '', url.pathname);
+
+      // Refresh bookings to show updated status
+      fetchBookings();
+    }
+  }, [searchParams]);
+
   // Fetch bookings on mount and when authentication changes
   useEffect(() => {
     fetchBookings();
   }, [isAuthenticated]);
-
-  const handleReschedule = (booking: Booking) => {
-    setSelectedBooking(booking);
-    setShowRescheduleModal(true);
-  };
 
   const handleCancel = (booking: Booking) => {
     setSelectedBooking(booking);
@@ -174,13 +194,7 @@ export default function MyBookingsPage() {
   };
 
   const handleViewDetails = (booking: Booking) => {
-    setSelectedBooking(booking);
-    setShowDetailsModal(true);
-  };
-
-  const handleModalSuccess = () => {
-    // Refetch bookings after successful modal action
-    fetchBookings();
+    router.push(`/my-bookings/${booking.id}`);
   };
 
   const handleCancelBooking = async () => {
@@ -397,6 +411,7 @@ export default function MyBookingsPage() {
                       size="sm"
                       onClick={() => handleViewDetails(booking)}
                     >
+                      <Eye className="w-4 h-4 mr-1" />
                       View Details
                     </Button>
                     
@@ -428,34 +443,76 @@ export default function MyBookingsPage() {
                     )}
                     
                     {(booking.status === 'pending' || booking.status === 'confirmed') && (
-                      <>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleReschedule(booking)}
-                        >
-                          <Edit className="w-4 h-4 mr-1" />
-                          Reschedule
-                        </Button>
-                        
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleCancel(booking)}
-                        >
-                          <X className="w-4 h-4 mr-1" />
-                          Cancel
-                        </Button>
-                      </>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleCancel(booking)}
+                      >
+                        <X className="w-4 h-4 mr-1" />
+                        Cancel
+                      </Button>
                     )}
                     
                     {booking.payment?.status === 'paid' && (
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => {
-                          // Simple receipt download simulation
-                          showSuccessToast('Receipt downloaded successfully');
+                        onClick={async () => {
+                          try {
+                            const receiptUrl = `http://localhost:8000/api/bookings/${booking.id}/receipt`;
+                            const token = localStorage.getItem('token');
+                            
+                            if (!token) {
+                              showErrorToast('Please log in to view receipt');
+                              return;
+                            }
+                            
+                            // Fetch the receipt HTML with authentication
+                            const response = await fetch(receiptUrl, {
+                              method: 'GET',
+                              headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Accept': 'text/html',
+                              },
+                              credentials: 'include'
+                            });
+                            
+                            if (!response.ok) {
+                              throw new Error('Failed to load receipt');
+                            }
+                            
+                            const html = await response.text();
+                            
+                            // Create a blob URL for the HTML content
+                            const blob = new Blob([html], { type: 'text/html' });
+                            const blobUrl = URL.createObjectURL(blob);
+                            
+                            // Open receipt in a new window with a proper URL
+                            const newWindow = window.open(blobUrl, '_blank');
+                            
+                            if (newWindow) {
+                              showSuccessToast('Receipt opened! Click "Save as PDF" to download');
+                              
+                              // Clean up the blob URL after window is likely loaded (or let browser handle it)
+                              // The blob URL will persist until browser closes or cleanup happens
+                              setTimeout(() => {
+                                URL.revokeObjectURL(blobUrl);
+                              }, 30000); // 30 seconds should be enough for the page to load
+                            } else {
+                              // Fallback: Download as HTML file
+                              const a = document.createElement('a');
+                              a.href = blobUrl;
+                              a.download = `receipt-booking-${booking.id}.html`;
+                              document.body.appendChild(a);
+                              a.click();
+                              document.body.removeChild(a);
+                              URL.revokeObjectURL(blobUrl);
+                              showSuccessToast('Receipt downloaded! Open it in your browser to save as PDF');
+                            }
+                          } catch (error) {
+                            console.error('Error loading receipt:', error);
+                            showErrorToast('Failed to load receipt. Please try again.');
+                          }
                         }}
                       >
                         <Download className="w-4 h-4 mr-1" />

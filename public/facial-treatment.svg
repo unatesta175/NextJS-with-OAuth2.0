@@ -1,9 +1,0 @@
-<svg width="300" height="200" viewBox="0 0 300 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="300" height="200" fill="#fdf2f8"/>
-<ellipse cx="150" cy="80" rx="60" ry="50" fill="#fce7f3"/>
-<circle cx="130" cy="65" r="8" fill="#ec4899"/>
-<circle cx="170" cy="65" r="8" fill="#ec4899"/>
-<ellipse cx="150" cy="90" rx="15" ry="8" fill="#ec4899"/>
-<path d="M120 110 Q150 105 180 110" stroke="#ec4899" stroke-width="2" fill="none"/>
-<text x="150" y="160" text-anchor="middle" fill="#4a5568" font-family="Arial, sans-serif" font-size="16" font-weight="bold">Facial Treatment</text>
-</svg>

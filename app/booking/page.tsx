@@ -11,9 +11,12 @@ import { Badge } from "@components/ui/badge";
 import { Calendar } from "@components/ui/calendar";
 import { Form } from "@components/ui/form";
 import { LoginModal } from "@components/ui/login-modal";
+import { Avatar, AvatarFallback, AvatarImage } from "@components/ui/avatar";
 import { ArrowLeft, ArrowRight, Clock, MapPin, CreditCard, User, Star, CheckCircle, DollarSign, Calendar as CalendarIcon } from "lucide-react";
 import { cn } from "@lib/utils";
 import { showSuccessToast, showErrorToast } from "@lib/toast";
+import { getUserImageUrl, getServiceImageUrl } from "@lib/image-utils";
+import Image from "next/image";
 
 // Interfaces
 interface BookingData {
@@ -613,10 +616,24 @@ export default function BookingPage() {
                       >
                         <CardContent className="p-6">
                           <div className="text-center">
-                            <div className="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(to bottom right, #ff0a85, #ff69b4)' }}>
-                              <span className="text-2xl text-white">
-                                {category.name.charAt(0)}
-                              </span>
+                            <div className="w-16 h-16 mx-auto mb-4 rounded-full overflow-hidden flex items-center justify-center" style={{ background: 'linear-gradient(to bottom right, #ff0a85, #ff69b4)' }}>
+                              {category.image ? (
+                                <Image
+                                  src={getServiceImageUrl(category.image)}
+                                  alt={category.name}
+                                  width={64}
+                                  height={64}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    // Fallback to letter if image fails to load
+                                    e.currentTarget.style.display = 'none';
+                                  }}
+                                />
+                              ) : (
+                                <span className="text-2xl text-white">
+                                  {category.name.charAt(0)}
+                                </span>
+                              )}
                             </div>
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                               {category.name}
@@ -746,21 +763,26 @@ export default function BookingPage() {
                         >
                           <CardContent className="p-6">
                             <div className="text-center">
-                              <div className="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(to bottom right, #ff0a85, #ff69b4)' }}>
-                                <User className="w-8 h-8 text-white" />
-                              </div>
+                              <Avatar className="w-16 h-16 mx-auto mb-4">
+                                <AvatarImage 
+                                  src={getUserImageUrl(therapist.image)} 
+                                  alt={therapist.name}
+                                  onError={(e) => {
+                                    console.log('Therapist avatar image failed to load:', therapist.image);
+                                    (e.target as HTMLImageElement).src = "/placeholder-avatar.svg";
+                                  }}
+                                />
+                                <AvatarFallback className="bg-primary text-white text-xl">
+                                  <User className="w-8 h-8" />
+                                </AvatarFallback>
+                              </Avatar>
                               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                                 {therapist.name}
                               </h3>
                               <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                                 {therapist.email}
                               </p>
-                              <div className="flex items-center justify-center">
-                                <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                                <span className="ml-1 text-sm text-gray-600 dark:text-gray-400">
-                                  4.8 (124 reviews)
-                                </span>
-                              </div>
+                             
                             </div>
                           </CardContent>
                         </Card>
@@ -889,14 +911,55 @@ export default function BookingPage() {
                   ) : (
                     <div className="space-y-4">
                       {(() => {
-                        const availableSlotsList = availableTimeSlots.filter((slot) => {
+                        // Check if selected date is today
+                        const today = new Date();
+                        const isToday = selectedDate && 
+                          selectedDate.getDate() === today.getDate() &&
+                          selectedDate.getMonth() === today.getMonth() &&
+                          selectedDate.getFullYear() === today.getFullYear();
+
+                        // Filter available slots and also filter out past times if it's today
+                        let availableSlotsList = availableTimeSlots.filter((slot) => {
                           return !availableSlots || availableSlots.some(s => s.time === slot && s.available);
                         });
+
+                        // If the selected date is today, filter out past timeslots
+                        if (isToday) {
+                          const currentTime = new Date();
+                          availableSlotsList = availableSlotsList.filter((slot) => {
+                            // Parse the slot time (e.g., "02:00 PM")
+                            const match = slot.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+                            if (!match) return true; // Keep if we can't parse
+                            
+                            let hours = parseInt(match[1]);
+                            const minutes = parseInt(match[2]);
+                            const period = match[3].toUpperCase();
+                            
+                            // Convert to 24-hour format
+                            if (period === 'PM' && hours !== 12) {
+                              hours += 12;
+                            } else if (period === 'AM' && hours === 12) {
+                              hours = 0;
+                            }
+                            
+                            // Create a date object for the slot time
+                            const slotTime = new Date();
+                            slotTime.setHours(hours, minutes, 0, 0);
+                            
+                            // Only show slots that are at least 30 minutes in the future
+                            const minFutureTime = new Date(currentTime.getTime() + 30 * 60 * 1000);
+                            return slotTime > minFutureTime;
+                          });
+                        }
                         
                         if (availableSlotsList.length === 0) {
                           return (
                             <div className="text-center py-8">
-                              <p className="text-gray-500">No available time slots for this date.</p>
+                              <p className="text-gray-500">
+                                {isToday 
+                                  ? "No available time slots for today. All slots have passed or are too soon." 
+                                  : "No available time slots for this date."}
+                              </p>
                               <p className="text-sm text-gray-400 mt-2">Please select a different date.</p>
                             </div>
                           );

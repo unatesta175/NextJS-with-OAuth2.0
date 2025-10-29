@@ -526,7 +526,7 @@ export function BookingsCalendarView() {
                     return (
                       <div
                         key={booking.id}
-                        className="absolute left-1 right-1 p-2 rounded-md border cursor-pointer hover:shadow-md transition-shadow"
+                        className="absolute left-1 right-1 p-2 rounded-md border cursor-pointer hover:shadow-md transition-shadow overflow-hidden"
                         style={{
                           ...position,
                           backgroundColor: statusStyle.bgColor,
@@ -535,10 +535,10 @@ export function BookingsCalendarView() {
                         }}
                         onClick={() => handleBookingClick(booking)}
                       >
-                        <div className="text-xs font-medium truncate">
+                        <div className="text-xs font-medium break-words">
                           {booking.client.name}
                         </div>
-                        <div className="text-xs text-gray-600 truncate">
+                        <div className="text-xs text-gray-600 break-words">
                           {booking.service.name}
                         </div>
                         <div className="text-xs mt-1">

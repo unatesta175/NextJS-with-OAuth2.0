@@ -8,7 +8,7 @@ export default function ClientDashboardPage() {
   return (
     <div className="max-w-4xl mx-auto py-8 space-y-8">
       <div className="text-center space-y-4">
-        <h2 className="scroll-m-20 text-3xl font-semibold tracking-tight text-primary">Welcome to Kapas Beauty Spa</h2>
+        <h2 className="scroll-m-20 text-3xl font-semibold tracking-tight text-primary">Welcome to Lunara Spa</h2>
         <p className="leading-7 text-lg text-muted-foreground">
           Discover relaxation and rejuvenation with our premium beauty treatments
         </p>

@@ -16,7 +16,7 @@ import {
   DropdownMenuSeparator, 
   DropdownMenuTrigger 
 } from "@components/ui/dropdown-menu";
-import { Search, Menu, MapPin, User, Calendar, LogOut } from "lucide-react";
+import { Search, Menu, User, Calendar, LogOut } from "lucide-react";
 import { useAppSelector, useAppDispatch } from "@lib/reduxHooks";
 import { logoutUser } from "@/features/auth/authSlice";
 import { getUserImageUrl } from "@lib/image-utils";
@@ -24,23 +24,15 @@ import { getUserImageUrl } from "@lib/image-utils";
 const Header = () => {
   const { user, isAuthenticated } = useAppSelector((state) => state.auth);
   const dispatch = useAppDispatch();
-  const [selectedBranch, setSelectedBranch] = useState("kl-central");
 
   const handleLogout = () => {
     dispatch(logoutUser());
   };
 
-  const branches = [
-    { value: "kl-central", label: "KL Central" },
-    { value: "mont-kiara", label: "Mont Kiara" },
-    { value: "klcc", label: "KLCC" },
-  ];
-
   const navItems = [
     { label: "Home", href: "/" },
     { label: "Category", href: "/categories" },
     { label: "Services", href: "/services" },
-    { label: "Shop", href: "/shop" },
     { label: "Booking", href: "/my-bookings" },
   ];
 
@@ -53,7 +45,7 @@ const Header = () => {
             <div className="relative h-10 w-32">
               <Image
                 src="/Logo/big-logo.png"
-                alt="Kapas Beauty Spa"
+                alt="Lunara Spa"
                 fill
                 className="object-contain"
                 priority
@@ -88,23 +80,6 @@ const Header = () => {
 
           {/* Right Section */}
           <div className="flex items-center space-x-4">
-            {/* Branch Selector */}
-            <div className="hidden md:flex items-center space-x-2">
-              <MapPin className="w-4 h-4 text-gray-500" />
-              <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                <SelectTrigger className="w-32 border-gray-300">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {branches.map((branch) => (
-                    <SelectItem key={branch.value} value={branch.value}>
-                      {branch.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
             {/* Book Now Button */}
             <Button 
               asChild
@@ -191,23 +166,6 @@ const Header = () => {
                       placeholder="Search..."
                       className="pl-10 pr-4 py-2 w-full"
                     />
-                  </div>
-
-                  {/* Mobile Branch Selector */}
-                  <div className="flex items-center space-x-2">
-                    <MapPin className="w-4 h-4 text-gray-500" />
-                    <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                      <SelectTrigger className="flex-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {branches.map((branch) => (
-                          <SelectItem key={branch.value} value={branch.value}>
-                            {branch.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
                   </div>
 
                   {/* Mobile Navigation */}

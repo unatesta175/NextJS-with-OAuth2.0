@@ -82,11 +82,11 @@ export default function CategoriesPage() {
       <section className="bg-gradient-to-r from-primary/10 to-purple-100 py-16">
         <div className="container mx-auto px-4 text-center">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Kategori Spa Premium Kami
+            Our Premium Spa Categories
           </h1>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Temui rangkaian lengkap rawatan spa kami yang direka untuk memupuk badan, 
-            minda, dan jiwa anda. Setiap kategori menawarkan perkhidmatan khusus yang dihasilkan oleh ahli terapi pakar kami.
+            Discover our complete range of spa treatments designed to nurture your body, 
+            mind, and soul. Each category offers specialized services crafted by our expert therapists.
           </p>
         </div>
       </section>
@@ -96,7 +96,7 @@ export default function CategoriesPage() {
         <div className="container mx-auto px-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {categories.map((category, index) => (
-            <Card key={category.id} className="group hover:shadow-xl transition-all duration-300 overflow-hidden">
+            <Card key={category.id} className="group hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col">
               {/* Category Image */}
               <div className="relative h-48 overflow-hidden">
                 <img
@@ -112,36 +112,33 @@ export default function CategoriesPage() {
                 <p className="text-gray-600 text-sm">{category.description}</p>
               </CardHeader>
 
-              <CardContent className="space-y-4">
-                {/* Tags Section */}
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-1 text-sm text-gray-500 mb-2">
-                    <Tag className="w-3 h-3" />
-                    <span>Sesuai untuk:</span>
+              <CardContent className="flex flex-col gap-4 mt-auto pt-0">
+                {/* Tags Section - Only show if there are tags */}
+                {category.tags && category.tags.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-1 text-sm text-gray-500 mb-2">
+                      <Tag className="w-3 h-3" />
+                      <span>Suitable for:</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {category.tags.map((tag) => (
+                        <Badge 
+                          key={tag.id} 
+                          variant="outline" 
+                          className="text-xs bg-primary/5 border-primary/20 text-primary"
+                        >
+                          {tag.name}
+                        </Badge>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {category.tags?.slice(0, 3).map((tag) => (
-                      <Badge 
-                        key={tag.id} 
-                        variant="outline" 
-                        className="text-xs bg-primary/5 border-primary/20 text-primary"
-                      >
-                        {tag.name}
-                      </Badge>
-                    ))}
-                    {category.tags && category.tags.length > 3 && (
-                      <Badge variant="outline" className="text-xs">
-                        +{category.tags.length - 3} lagi
-                      </Badge>
-                    )}
-                  </div>
-                </div>
+                )}
 
-                {/* Stats */}
+                {/* Stats - Always at bottom */}
                 <div className="flex items-center justify-between pt-4 border-t">
                   <div className="flex items-center space-x-1 text-sm text-gray-500">
                     <Users className="w-4 h-4" />
-                    <span>{category.services_count || 0} Perkhidmatan</span>
+                    <span>{category.services_count || 0} Services</span>
                   </div>
                   <Button 
                     asChild
@@ -149,7 +146,7 @@ export default function CategoriesPage() {
                     className="bg-primary hover:bg-primary/90 text-white"
                   >
                     <Link href={`/services?category=${category.id}`}>
-                      Lihat Semua <ArrowRight className="w-3 h-3 ml-1" />
+                      View All <ArrowRight className="w-3 h-3 ml-1" />
                     </Link>
                   </Button>
                 </div>
@@ -164,17 +161,17 @@ export default function CategoriesPage() {
       <section className="py-16 bg-white">
         <div className="container mx-auto px-4 text-center">
           <h2 className="text-3xl font-bold text-gray-900 mb-4">
-            Bersedia untuk Memulakan Perjalanan Kesihatan Anda?
+            Ready to Begin Your Wellness Journey?
           </h2>
           <p className="text-gray-600 mb-8 max-w-2xl mx-auto">
-            Tempah rawatan pilihan anda hari ini dan alami kesempurnaan dalam relaksasi dan pemulihan.
+            Book your preferred treatment today and experience perfection in relaxation and recovery.
           </p>
           <Button 
             asChild
             size="lg" 
             className="bg-primary hover:bg-primary/90 text-white px-8 py-4"
           >
-            <Link href="/booking">Tempah Sekarang</Link>
+            <Link href="/booking">Book Now</Link>
           </Button>
         </div>
       </section>

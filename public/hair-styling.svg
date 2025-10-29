@@ -1,9 +1,0 @@
-<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="200" height="200" fill="#fdf2f8"/>
-<circle cx="100" cy="80" r="30" fill="#fce7f3"/>
-<path d="M80 60 Q100 40 120 60" stroke="#ec4899" stroke-width="3" fill="none"/>
-<path d="M75 70 Q90 50 105 70" stroke="#ec4899" stroke-width="2" fill="none"/>
-<path d="M95 70 Q110 50 125 70" stroke="#ec4899" stroke-width="2" fill="none"/>
-<rect x="90" y="120" width="20" height="40" rx="10" fill="#9333ea"/>
-<text x="100" y="180" text-anchor="middle" fill="#4a5568" font-family="Arial, sans-serif" font-size="12" font-weight="bold">Hair Styling</text>
-</svg>

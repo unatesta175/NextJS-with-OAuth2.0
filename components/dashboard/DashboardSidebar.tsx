@@ -12,9 +12,6 @@ import {
   ShoppingBag, 
   Tag, 
   Tags,
-  Star, 
-  BarChart3,
-  ClipboardList,
   X
 } from 'lucide-react'
 import { cn } from '@lib/utils'
@@ -29,8 +26,6 @@ interface DashboardSidebarProps {
 const staffNavItems = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Calendar/Bookings', href: '/dashboard/bookings', icon: Calendar },
-  { label: 'My Schedule', href: '/dashboard/schedule', icon: ClipboardList },
-  { label: 'Reviews', href: '/dashboard/reviews', icon: Star },
 ]
 
 const adminNavItems = [
@@ -41,8 +36,6 @@ const adminNavItems = [
   { label: 'Products', href: '/dashboard/products', icon: ShoppingBag },
   { label: 'Categories', href: '/dashboard/categories', icon: Tag },
   { label: 'Tags', href: '/dashboard/tags', icon: Tags },
-  { label: 'Reviews', href: '/dashboard/reviews', icon: Star },
-  { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
 ]
 
 export function DashboardSidebar({ userRole, isCollapsed = false, onToggle }: DashboardSidebarProps) {
@@ -69,7 +62,7 @@ export function DashboardSidebar({ userRole, isCollapsed = false, onToggle }: Da
         <div className="relative flex items-center justify-center p-4 border-b border-gray-200">
           <Image 
             src="/logo/big-logo.png" 
-            alt="Kapas Beauty Logo" 
+            alt="Lunara Spa Logo" 
             width={90} 
             height={40}
             className="object-contain"

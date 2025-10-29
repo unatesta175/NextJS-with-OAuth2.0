@@ -34,7 +34,7 @@ interface Service {
   category: ServiceCategory;
 }
 
-// Mock services data (fallback)
+// Mock services data (fallback) - images will be loaded from backend
 const allServices = [
   {
     id: 1,
@@ -45,7 +45,7 @@ const allServices = [
     rating: 4.9,
     reviews: 234,
     description: "Deep hydration treatment that replenishes moisture and restores skin's natural glow",
-    image: "/facial-treatment.svg",
+    image: "",
     popular: true,
     benefits: ["Deep Hydration", "Anti-Aging", "Skin Brightening"]
   },
@@ -58,7 +58,7 @@ const allServices = [
     rating: 4.8,
     reviews: 189,
     description: "Relaxing massage using long strokes to improve circulation and reduce muscle tension",
-    image: "/swedish-massage.svg",
+    image: "",
     popular: true,
     benefits: ["Muscle Relaxation", "Stress Relief", "Improved Circulation"]
   },
@@ -71,7 +71,7 @@ const allServices = [
     rating: 4.7,
     reviews: 156,
     description: "Professional hair removal service with premium wax for sensitive areas",
-    image: "/waxing-service.svg",
+    image: "",
     popular: false,
     benefits: ["Long-lasting", "Professional Grade", "Gentle Formula"]
   },
@@ -84,7 +84,7 @@ const allServices = [
     rating: 4.9,
     reviews: 98,
     description: "Transform your hair with this smoothing treatment that reduces frizz and adds shine",
-    image: "/hair-treatment.svg",
+    image: "",
     popular: false,
     benefits: ["Frizz Control", "Added Shine", "Smoother Hair"]
   },
@@ -97,7 +97,7 @@ const allServices = [
     rating: 4.6,
     reviews: 267,
     description: "Complete nail care with long-lasting gel polish and nail art options",
-    image: "/nail-treatment.svg",
+    image: "",
     popular: true,
     benefits: ["Long-lasting", "Chip Resistant", "Beautiful Finish"]
   },
@@ -110,7 +110,7 @@ const allServices = [
     rating: 4.8,
     reviews: 134,
     description: "Therapeutic massage using heated stones to penetrate deep into muscles",
-    image: "/hot-stone-massage.svg",
+    image: "",
     popular: false,
     benefits: ["Deep Muscle Relief", "Improved Circulation", "Stress Reduction"]
   },
@@ -123,7 +123,7 @@ const allServices = [
     rating: 4.9,
     reviews: 178,
     description: "Advanced anti-aging treatment using cutting-edge technology and premium serums",
-    image: "/anti-aging-facial.svg",
+    image: "",
     popular: true,
     benefits: ["Reduces Fine Lines", "Firms Skin", "Boosts Collagen"]
   },
@@ -136,7 +136,7 @@ const allServices = [
     rating: 4.7,
     reviews: 145,
     description: "Relaxing massage with essential oils to balance mind, body, and spirit",
-    image: "/aromatherapy.svg",
+    image: "",
     popular: false,
     benefits: ["Stress Relief", "Mental Clarity", "Emotional Balance"]
   }
@@ -171,8 +171,9 @@ export default function ServicesPage() {
       } catch (err) {
         console.error('Error fetching data:', err);
         setError('Failed to load services');
-        // Use mock data as fallback
-        setServices(allServices as any);
+        // Don't use mock data as fallback
+        setServices([]);
+        setCategories([]);
       } finally {
         setIsLoading(false);
       }
@@ -242,13 +243,13 @@ export default function ServicesPage() {
               </Link>
             )}
             <h1 className="text-4xl font-bold text-gray-900">
-              {currentCategory ? `Perkhidmatan ${currentCategory.name}` : 'Perkhidmatan Kami'}
+              {currentCategory ? `${currentCategory.name} Services` : 'Our Services'}
             </h1>
           </div>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto mb-8">
             {currentCategory 
               ? currentCategory.description
-              : 'Temui rangkaian lengkap rawatan spa premium kami yang direka untuk memulihkan tenaga, bersantai, dan memulihkan kecantikan semula jadi anda.'
+              : 'Discover our complete range of premium spa treatments designed to restore energy, relax, and restore your natural beauty.'
             }
           </p>
 
@@ -260,7 +261,7 @@ export default function ServicesPage() {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
                   type="text"
-                  placeholder="Cari perkhidmatan..."
+                  placeholder="Search services..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 pr-4 py-3"
@@ -271,10 +272,10 @@ export default function ServicesPage() {
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                 <SelectTrigger className="w-48">
                   <Filter className="w-4 h-4 mr-2" />
-                  <SelectValue placeholder="Kategori" />
+                  <SelectValue placeholder="Category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="All">Semua Kategori</SelectItem>
+                  <SelectItem value="All">All Categories</SelectItem>
                   {categories.map((category) => (
                     <SelectItem key={category.id} value={category.id.toString()}>
                       {category.name}
@@ -289,10 +290,10 @@ export default function ServicesPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="popular">Nama A-Z</SelectItem>
-                  <SelectItem value="price-low">Harga: Rendah ke Tinggi</SelectItem>
-                  <SelectItem value="price-high">Harga: Tinggi ke Rendah</SelectItem>
-                  <SelectItem value="duration">Tempoh Masa</SelectItem>
+                  <SelectItem value="popular">Name A-Z</SelectItem>
+                  <SelectItem value="price-low">Price: Low to High</SelectItem>
+                  <SelectItem value="price-high">Price: High to Low</SelectItem>
+                  <SelectItem value="duration">Duration</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -315,7 +316,7 @@ export default function ServicesPage() {
           {/* Services Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredServices.map((service) => (
-              <Card key={service.id} className="group hover:shadow-xl transition-all duration-300 overflow-hidden">
+              <Card key={service.id} className="group hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col">
                 {/* Service Image */}
                 <div className="relative h-48 overflow-hidden">
                   <img
@@ -325,7 +326,7 @@ export default function ServicesPage() {
                   />
                   {service.type === 'promo' && (
                     <Badge className="absolute top-4 left-4 bg-red-500 text-white">
-                      Promosi
+                      Promotion
                     </Badge>
                   )}
                   <Badge className="absolute top-4 right-4 bg-white text-gray-700">
@@ -345,32 +346,30 @@ export default function ServicesPage() {
                     </div>
                   </div>
                   
-                  <p className="text-gray-600 text-sm line-clamp-2 mb-4">{service.description}</p>
+                  <p className="text-gray-600 text-sm line-clamp-2">{service.description}</p>
                 </CardHeader>
 
-                <CardContent className="space-y-4">
-                  {/* Extra Description */}
+                <CardContent className="flex flex-col gap-4 mt-auto pt-0">
+                  {/* Extra Description - Only show if there are valid tags */}
                   {service.extradescription && (() => {
                     try {
                       const extraDesc = Array.isArray(service.extradescription) 
                         ? service.extradescription 
                         : JSON.parse(service.extradescription);
                       
-                      if (extraDesc && extraDesc.length > 0) {
+                      // Filter out empty strings and check if there are valid items
+                      const validItems = extraDesc.filter((item: string) => item && item.trim() !== '');
+                      
+                      if (validItems && validItems.length > 0) {
                         return (
                           <div>
-                            <h4 className="font-medium text-sm text-gray-800 mb-2">Termasuk:</h4>
+                            <h4 className="font-medium text-sm text-gray-800 mb-2">Includes:</h4>
                             <div className="flex flex-wrap gap-1">
-                              {extraDesc.slice(0, 3).map((item, index) => (
+                              {validItems.map((item: string, index: number) => (
                                 <Badge key={index} variant="secondary" className="text-xs">
                                   {item}
                                 </Badge>
                               ))}
-                              {extraDesc.length > 3 && (
-                                <Badge variant="outline" className="text-xs">
-                                  +{extraDesc.length - 3} lagi
-                                </Badge>
-                              )}
                             </div>
                           </div>
                         );
@@ -381,13 +380,13 @@ export default function ServicesPage() {
                     return null;
                   })()}
 
-                  {/* Action Button */}
+                  {/* Action Button - Always at bottom */}
                   <Button 
                     asChild
                     className="w-full bg-primary hover:bg-primary/90 text-white"
                   >
                     <Link href={`/booking?service=${service.id}&category=${service.category?.id || ''}`}>
-                      Tempah Sekarang
+                      Book Now
                     </Link>
                   </Button>
                 </CardContent>
@@ -399,15 +398,15 @@ export default function ServicesPage() {
           {filteredServices.length === 0 && (
             <div className="text-center py-16">
               <div className="text-6xl mb-4">🔍</div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Tiada perkhidmatan dijumpai</h3>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">No services found</h3>
               <p className="text-gray-600 mb-6">
-                Cuba laraskan istilah carian atau penapis anda untuk mencari apa yang anda cari.
+                Try adjusting your search terms or filters to find what you're looking for.
               </p>
               <Button onClick={() => {
                 setSearchTerm("");
                 setSelectedCategory("All");
               }}>
-                Kosongkan Penapis
+                Clear Filters
               </Button>
             </div>
           )}

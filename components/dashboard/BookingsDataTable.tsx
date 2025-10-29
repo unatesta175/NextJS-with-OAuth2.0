@@ -18,6 +18,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@components/ui/dropdown-menu'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@components/ui/sheet'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@components/ui/dialog'
 import { Button } from '@components/ui/button'
 import { Input } from '@components/ui/input'
 import { Badge } from '@components/ui/badge'
@@ -36,10 +51,15 @@ import {
   ArrowUpDown,
   Eye,
   Edit,
-  Trash2,
-  RefreshCw
+  X,
+  RefreshCw,
+  Calendar,
+  Clock,
+  Mail,
+  Phone
 } from 'lucide-react'
 import { DatePicker } from '@components/ui/date-picker'
+import { showSuccessToast, showErrorToast } from '@lib/toast'
 
 interface Booking {
   id: number
@@ -110,13 +130,41 @@ const formatTime = (timeString: string): string => {
 }
 
 const statusConfig = {
-  pending: { label: 'Pending', color: 'bg-yellow-100 text-yellow-800' },
-  confirmed: { label: 'Confirmed', color: 'bg-blue-100 text-blue-800' },
-  checked_in: { label: 'Checked In', color: 'bg-indigo-100 text-indigo-800' },
-  checked_out: { label: 'Checked Out', color: 'bg-purple-100 text-purple-800' },
-  completed: { label: 'Completed', color: 'bg-green-100 text-green-800' },
-  cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800' },
-  no_show: { label: 'No Show', color: 'bg-gray-100 text-gray-800' }
+  pending: { 
+    label: 'Pending', 
+    color: 'bg-yellow-100 text-yellow-800',
+    badgeClass: 'text-[#e5a900] border-[#e5a900]'
+  },
+  confirmed: { 
+    label: 'Confirmed', 
+    color: 'bg-blue-100 text-blue-800',
+    badgeClass: 'text-[#6E6EEF] border-[#6E6EEF]'
+  },
+  checked_in: { 
+    label: 'Check In', 
+    color: 'bg-indigo-100 text-indigo-800',
+    badgeClass: 'text-[#D68AF1] border-[#D68AF1]'
+  },
+  checked_out: { 
+    label: 'Checkout', 
+    color: 'bg-purple-100 text-purple-800',
+    badgeClass: 'text-[#E58282] border-[#E58282]'
+  },
+  completed: { 
+    label: 'Completed', 
+    color: 'bg-green-100 text-green-800',
+    badgeClass: 'text-[#3ABA61] border-[#3ABA61]'
+  },
+  cancelled: { 
+    label: 'Cancelled', 
+    color: 'bg-red-100 text-red-800',
+    badgeClass: 'text-red-600 border-red-600'
+  },
+  no_show: { 
+    label: 'No Show', 
+    color: 'bg-gray-100 text-gray-800',
+    badgeClass: 'text-gray-600 border-gray-600'
+  }
 }
 
 export function BookingsDataTable() {
@@ -132,6 +180,17 @@ export function BookingsDataTable() {
   })
   const [bookingsData, setBookingsData] = useState<Booking[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  
+  // Sheet states
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false)
+  const [sheetView, setSheetView] = useState<'details' | 'payment' | 'completed'>('details')
+  const [isUpdating, setIsUpdating] = useState(false)
+  
+  // Cancel modal states
+  const [bookingToCancel, setBookingToCancel] = useState<Booking | null>(null)
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false)
+  const [isCancelling, setIsCancelling] = useState(false)
 
   // Fetch bookings from API
   useEffect(() => {
@@ -211,18 +270,141 @@ export function BookingsDataTable() {
   }
 
   const handleView = (booking: Booking) => {
-    // TODO: Open booking details
-    console.log('View booking:', booking.id)
+    setSelectedBooking(booking)
+    setSheetView('details')
+    setIsDetailsOpen(true)
   }
 
   const handleEdit = (booking: Booking) => {
-    // TODO: Open edit booking modal
-    console.log('Edit booking:', booking.id)
+    setSelectedBooking(booking)
+    setSheetView('details')
+    setIsDetailsOpen(true)
   }
 
-  const handleDelete = (booking: Booking) => {
-    // TODO: Delete booking with confirmation
-    console.log('Delete booking:', booking.id)
+  const handleCancel = (booking: Booking) => {
+    // Check if booking can be cancelled
+    if (!['pending', 'confirmed'].includes(booking.status)) {
+      showErrorToast('Only pending or confirmed bookings can be cancelled')
+      return
+    }
+
+    // Open cancel confirmation modal
+    setBookingToCancel(booking)
+    setIsCancelModalOpen(true)
+  }
+
+  const handleConfirmCancel = async () => {
+    if (!bookingToCancel) return
+
+    setIsCancelling(true)
+    try {
+      const response = await api.put(`/bookings/${bookingToCancel.id}/cancel`, {
+        reason: 'Cancelled by admin'
+      })
+      
+      if (response.data.success) {
+        // Update local state
+        const updatedBooking = response.data.data
+        setBookingsData(prev => 
+          prev.map(b => b.id === updatedBooking.id ? updatedBooking : b)
+        )
+        
+        showSuccessToast('Booking cancelled successfully')
+        setIsCancelModalOpen(false)
+        setBookingToCancel(null)
+      }
+    } catch (error: any) {
+      console.error('Failed to cancel booking:', error)
+      showErrorToast(error.response?.data?.message || 'Failed to cancel booking')
+    } finally {
+      setIsCancelling(false)
+    }
+  }
+
+  const handleCancelModalClose = () => {
+    if (!isCancelling) {
+      setIsCancelModalOpen(false)
+      setBookingToCancel(null)
+    }
+  }
+
+  const handleStatusChange = async (newStatus: Booking['status']) => {
+    if (!selectedBooking) return
+    
+    setIsUpdating(true)
+    try {
+      const response = await api.put(`/admin/bookings/${selectedBooking.id}/status`, {
+        status: newStatus
+      })
+      
+      if (response.data.success) {
+        // Update local state
+        const updatedBooking = response.data.data
+        setSelectedBooking(updatedBooking)
+        
+        // Update in the bookings list
+        setBookingsData(prev => 
+          prev.map(b => b.id === updatedBooking.id ? updatedBooking : b)
+        )
+        
+        showSuccessToast(`Booking status changed to ${statusConfig[newStatus].label}`)
+      }
+    } catch (error: any) {
+      console.error('Failed to update status:', error)
+      showErrorToast(error.response?.data?.message || 'Failed to update booking status')
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  const handleConfirmBooking = () => {
+    handleStatusChange('confirmed')
+  }
+
+  const handleCheckIn = () => {
+    handleStatusChange('checked_in')
+  }
+
+  const handleCheckout = () => {
+    handleStatusChange('checked_out')
+  }
+
+  const handleGoToPayment = () => {
+    setSheetView('payment')
+  }
+
+  const handleCompleteBooking = () => {
+    setSheetView('completed')
+  }
+
+  const handlePayNow = async () => {
+    if (!selectedBooking?.payment) return
+    
+    setIsUpdating(true)
+    try {
+      // Update payment status to paid for cash payments
+      const response = await api.put(`/admin/bookings/${selectedBooking.id}/status`, {
+        status: 'completed'
+      })
+      
+      if (response.data.success) {
+        const updatedBooking = response.data.data
+        setSelectedBooking(updatedBooking)
+        
+        setBookingsData(prev => 
+          prev.map(b => b.id === updatedBooking.id ? updatedBooking : b)
+        )
+        
+        setSheetView('completed')
+        
+        showSuccessToast('Booking completed successfully')
+      }
+    } catch (error: any) {
+      console.error('Failed to process payment:', error)
+      showErrorToast(error.response?.data?.message || 'Failed to process payment')
+    } finally {
+      setIsUpdating(false)
+    }
   }
 
   return (
@@ -431,11 +613,12 @@ export function BookingsDataTable() {
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem 
-                        onClick={() => handleDelete(booking)}
+                        onClick={() => handleCancel(booking)}
                         className="text-red-600"
+                        disabled={!['pending', 'confirmed'].includes(booking.status)}
                       >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
+                        <X className="h-4 w-4 mr-2" />
+                        Cancel
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -489,6 +672,352 @@ export function BookingsDataTable() {
           </Button>
         </div>
       </div>
+
+      {/* Cancel Confirmation Modal */}
+      <Dialog open={isCancelModalOpen} onOpenChange={handleCancelModalClose}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancel Booking?</DialogTitle>
+            <DialogDescription>
+              {bookingToCancel && (
+                <>Are you sure you want to cancel booking <span className="font-semibold">#{bookingToCancel.id}</span>? This action cannot be undone.</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={handleCancelModalClose}
+              disabled={isCancelling}
+            >
+              Keep Booking
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmCancel}
+              disabled={isCancelling}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isCancelling ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Cancelling...
+                </>
+              ) : (
+                'Cancel Booking'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Booking Details Sheet */}
+      <Sheet open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
+        <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
+          {selectedBooking && (
+            <>
+              {sheetView === 'details' && (
+                <>
+                  <SheetHeader>
+                    <SheetTitle className="text-xl font-bold">
+                      Booking #{selectedBooking.id}
+                    </SheetTitle>
+                    <div className="flex items-center gap-2 mt-2">
+                      <Badge 
+                        variant="outline" 
+                        className={`${statusConfig[selectedBooking.status].badgeClass} font-medium`}
+                        style={{ borderWidth: '1.5px' }}
+                      >
+                        {statusConfig[selectedBooking.status].label}
+                      </Badge>
+                      {selectedBooking.status === 'pending' && (
+                        <Button 
+                          size="sm" 
+                          onClick={handleConfirmBooking}
+                          disabled={isUpdating}
+                          className="ml-auto bg-[#6E6EEF] hover:bg-[#6E6EEF]/90"
+                        >
+                          {isUpdating ? 'Confirming...' : 'Confirm'}
+                        </Button>
+                      )}
+                      {selectedBooking.status === 'confirmed' && (
+                        <Button 
+                          size="sm" 
+                          onClick={handleCheckIn}
+                          disabled={isUpdating}
+                          className="ml-auto bg-[#D68AF1] hover:bg-[#D68AF1]/90"
+                        >
+                          {isUpdating ? 'Processing...' : 'Check In'}
+                        </Button>
+                      )}
+                      {selectedBooking.status === 'checked_in' && (
+                        <Button 
+                          size="sm" 
+                          onClick={handleCheckout}
+                          disabled={isUpdating}
+                          className="ml-auto bg-[#E58282] hover:bg-[#E58282]/90"
+                        >
+                          {isUpdating ? 'Processing...' : 'Checkout'}
+                        </Button>
+                      )}
+                    </div>
+                  </SheetHeader>
+
+                  <div className="mt-6 space-y-6">
+                    {/* Date */}
+                    <div className="bg-gray-50 rounded-lg p-3 flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-gray-600" />
+                      <span className="font-medium">{formatDate(selectedBooking.appointment_date)}</span>
+                    </div>
+
+                    {/* Time */}
+                    <div className="bg-gray-50 rounded-lg p-3 flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-gray-600" />
+                      <span className="font-medium">
+                        {formatTime(selectedBooking.appointment_time)}
+                      </span>
+                    </div>
+
+                    {/* Client Information */}
+                    <div className="space-y-3">
+                      <h3 className="font-semibold text-gray-900">Client Information</h3>
+                      <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-12 w-12">
+                            <AvatarFallback className="bg-[#ff0a85] text-white">
+                              {selectedBooking.client.name.split(' ').map(n => n[0]).join('')}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="font-medium text-gray-900">{selectedBooking.client.name}</div>
+                          </div>
+                        </div>
+                        {selectedBooking.client.phone && (
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Phone className="h-4 w-4" />
+                            <span>{selectedBooking.client.phone}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <Mail className="h-4 w-4" />
+                          <span>{selectedBooking.client.email}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Service Details */}
+                    <div className="space-y-3">
+                      <h3 className="font-semibold text-gray-900">Service Details</h3>
+                      <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">Service</span>
+                          <span className="font-medium text-gray-900">{selectedBooking.service.name}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">Duration</span>
+                          <span className="font-medium text-gray-900">{selectedBooking.service.duration} minutes</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Notes */}
+                    {selectedBooking.notes && (
+                      <div className="space-y-3">
+                        <h3 className="font-semibold text-gray-900">Notes</h3>
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <p className="text-sm text-gray-600">{selectedBooking.notes}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Payment Information */}
+                    <div className="space-y-3">
+                      <h3 className="font-semibold text-gray-900">Payment</h3>
+                      <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">Payment Method</span>
+                          <span className="font-medium text-gray-900 capitalize">
+                            {selectedBooking.payment?.payment_method || 'N/A'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">Subtotal</span>
+                          <span className="font-medium text-lg text-gray-900">
+                            RM {Number(selectedBooking.total_amount).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Checkout Actions */}
+                    {selectedBooking.status === 'checked_out' && (
+                      <div className="pt-4 border-t">
+                        {selectedBooking.payment?.payment_method === 'cash' ? (
+                          <Button 
+                            className="w-full bg-[#3ABA61] hover:bg-[#3ABA61]/90"
+                            onClick={handleGoToPayment}
+                          >
+                            Go to Payment
+                          </Button>
+                        ) : (
+                          <Button 
+                            className="w-full bg-[#3ABA61] hover:bg-[#3ABA61]/90"
+                            onClick={handleCompleteBooking}
+                          >
+                            Complete Booking
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {sheetView === 'payment' && (
+                <>
+                  <SheetHeader>
+                    <SheetTitle className="text-xl font-bold">
+                      Payment - Booking #{selectedBooking.id}
+                    </SheetTitle>
+                  </SheetHeader>
+
+                  <div className="mt-6 space-y-6">
+                    <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Booking ID</span>
+                        <span className="font-medium text-gray-900">#{selectedBooking.id}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Service</span>
+                        <span className="font-medium text-gray-900">{selectedBooking.service.name}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Amount</span>
+                        <span className="font-medium text-gray-900">{selectedBooking.service.duration} min</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-3 border-t">
+                        <span className="text-sm text-gray-600">Payment Method</span>
+                        <span className="font-medium text-gray-900 uppercase">CASH</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-gray-900">Total</span>
+                        <span className="font-bold text-xl text-gray-900">
+                          RM {Number(selectedBooking.total_amount).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <Button 
+                      className="w-full bg-[#3ABA61] hover:bg-[#3ABA61]/90 text-white"
+                      onClick={handlePayNow}
+                      disabled={isUpdating}
+                    >
+                      {isUpdating ? 'Processing...' : 'Pay Now'}
+                    </Button>
+                  </div>
+                </>
+              )}
+
+              {sheetView === 'completed' && (
+                <>
+                  <SheetHeader>
+                    <SheetTitle className="text-xl font-bold flex items-center gap-2">
+                      Booking #{selectedBooking.id}
+                      <Badge 
+                        variant="outline" 
+                        className="text-[#3ABA61] border-[#3ABA61] font-medium"
+                        style={{ borderWidth: '1.5px' }}
+                      >
+                        Completed
+                      </Badge>
+                    </SheetTitle>
+                  </SheetHeader>
+
+                  <div className="mt-6 space-y-6">
+                    {/* Client Information */}
+                    <div className="space-y-3">
+                      <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-12 w-12">
+                            <AvatarFallback className="bg-[#ff0a85] text-white">
+                              {selectedBooking.client.name.split(' ').map(n => n[0]).join('')}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="font-medium text-gray-900">{selectedBooking.client.name}</div>
+                          </div>
+                        </div>
+                        {selectedBooking.client.phone && (
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Phone className="h-4 w-4" />
+                            <span>{selectedBooking.client.phone}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <Mail className="h-4 w-4" />
+                          <span>{selectedBooking.client.email}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Service & Therapist */}
+                    <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Service</span>
+                        <span className="font-medium text-gray-900">{selectedBooking.service.name}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Therapist</span>
+                        <span className="font-medium text-gray-900">{selectedBooking.therapist.name}</span>
+                      </div>
+                    </div>
+
+                    {/* Payment Information */}
+                    <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Total Paid</span>
+                        <span className="font-bold text-lg text-[#3ABA61]">
+                          RM {Number(selectedBooking.total_amount).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Payment Method</span>
+                        <span className="font-medium text-gray-900 uppercase">
+                          {selectedBooking.payment?.payment_method || 'N/A'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Booking Details */}
+                    <div className="space-y-3">
+                      <h3 className="font-semibold text-gray-900">Booking Details</h3>
+                      <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Booked On</span>
+                          <span className="font-medium text-gray-900">{formatDate(selectedBooking.created_at)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Booked By</span>
+                          <span className="font-medium text-gray-900">{selectedBooking.client.name}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Updated On</span>
+                          <span className="font-medium text-gray-900">{formatDate(selectedBooking.updated_at)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Updated By</span>
+                          <span className="font-medium text-gray-900">Salon Admin</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
